@@ -18,19 +18,24 @@ class ProjectPlatforms {
     };
   }
 
+  /// Android needs the app manifest and its Gradle build file, Windows the
+  /// runner's CMake project.
   static bool supports(String projectPath, String platform) {
-    final separator = Platform.pathSeparator;
+    bool exists(String relativePath) => File(
+      '$projectPath${Platform.pathSeparator}'
+      '${relativePath.replaceAll('/', Platform.pathSeparator)}',
+    ).existsSync();
+
     return switch (platform) {
-      'Windows' => File(
-        '$projectPath${separator}windows${separator}CMakeLists.txt',
-      ).existsSync(),
+      'Windows' => exists('windows/CMakeLists.txt'),
       'Android' =>
-        File('$projectPath${separator}android${separator}app${separator}build.gradle')
-                .existsSync() ||
-            File(
-              '$projectPath${separator}android${separator}app${separator}build.gradle.kts',
-            ).existsSync(),
+        exists(androidManifest) &&
+            (exists('android/app/build.gradle') ||
+                exists('android/app/build.gradle.kts')),
       _ => true,
     };
   }
+
+  /// Relative to the project folder.
+  static const androidManifest = 'android/app/src/main/AndroidManifest.xml';
 }

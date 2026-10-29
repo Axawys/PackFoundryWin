@@ -15,6 +15,7 @@ import 'package:pack_foundry/core/services/project_config_service.dart';
 import 'package:pack_foundry/l10n/app_localizations.dart';
 import 'package:pack_foundry/main.dart';
 import 'package:pack_foundry/ui/widgets/build_panel.dart';
+import 'package:pack_foundry/ui/widgets/version_field.dart';
 
 /// A workspace tab; the Project workspace has a Build button of its own.
 Finder tab(String label) =>
@@ -432,7 +433,12 @@ void main() {
     }
     expect(lockedFields, findsNothing);
 
-    await tester.enterText(field('Release tag'), 'v2.3.0');
+    final versionParts = find.descendant(
+      of: find.byType(VersionField),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(versionParts.at(0), '2');
+    await tester.enterText(versionParts.at(1), '3');
     await tester.enterText(field('Developer email'), 'dev@example.com');
     await tester.enterText(field('Developer / publisher'), 'Example Studio');
     await tester.enterText(field('Project homepage'), 'https://example.com');
@@ -454,8 +460,16 @@ void main() {
     await tester.pump();
 
     expect(
-      tester.widget<TextField>(field('Release tag')).controller?.text,
-      'v2.3.0',
+      [
+        for (final part in tester.widgetList<TextField>(
+          find.descendant(
+            of: find.byType(VersionField),
+            matching: find.byType(TextField),
+          ),
+        ))
+          part.controller?.text,
+      ],
+      ['2', '3', '0'],
     );
     expect(
       tester.widget<TextField>(field('Developer email')).controller?.text,

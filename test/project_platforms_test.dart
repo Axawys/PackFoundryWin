@@ -27,6 +27,11 @@ void main() {
 
     await touch('android/app/build.gradle.kts');
 
+    // A Gradle file alone is not an Android app: the manifest is missing.
+    expect(ProjectPlatforms.supports(project.path, 'Android'), isFalse);
+
+    await touch('android/app/src/main/AndroidManifest.xml');
+
     expect(ProjectPlatforms.supports(project.path, 'Android'), isTrue);
     expect(ProjectPlatforms.supports(project.path, 'Windows'), isFalse);
 

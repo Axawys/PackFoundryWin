@@ -7,12 +7,12 @@ import '../../core/models/build_target.dart';
 import '../../core/models/chip_tone.dart';
 import '../../core/models/config_preset.dart';
 import '../../core/models/developer_defaults.dart';
-import '../../core/services/project_platforms.dart';
 import '../../core/services/package_file_names.dart';
 import '../../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import 'license_field.dart';
 import 'status_chip.dart';
+import 'version_field.dart';
 import 'workspace_card.dart';
 
 class ProjectCheck {
@@ -516,13 +516,7 @@ class _AboutStep extends StatelessWidget {
           decoration: InputDecoration(labelText: l10n.applicationName),
         ),
         const SizedBox(height: 14),
-        TextField(
-          controller: w.releaseTagController,
-          decoration: InputDecoration(
-            labelText: l10n.releaseTag,
-            hintText: 'v1.0.0',
-          ),
-        ),
+        VersionField(controller: w.releaseTagController),
         const SizedBox(height: 14),
         TextField(
           controller: w.descriptionController,
@@ -721,10 +715,25 @@ class _OutputStep extends StatelessWidget {
     final l10n = context.l10n;
     final theme = Theme.of(context);
     final w = workspace;
+    // Targets of platforms the project lacks are not offered at all.
+    final targets = [
+      for (final target in w.targets)
+        if (target.status != TargetStatus.missingPlatform) target,
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final target in w.targets) ...[
+        if (targets.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              l10n.noProjectPlatforms,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        for (final target in targets) ...[
           _TargetTile(
             target: target,
             onChanged: (selected) => w.onTargetChanged(target, selected),
@@ -799,12 +808,7 @@ class _TargetTile extends StatelessWidget {
     final l10n = context.l10n;
     final colorScheme = Theme.of(context).colorScheme;
     final enabled = target.canSelect;
-    final subtitle = target.status == TargetStatus.missingPlatform
-        ? l10n.targetMissingPlatform(
-            ProjectPlatforms.folderFor(target.platform) ??
-                target.platform.toLowerCase(),
-          )
-        : target.artifact == BuildTarget.buildScript
+    final subtitle = target.artifact == BuildTarget.buildScript
         ? l10n.buildScriptTargetHint
         : target.artifact == BuildTarget.portable &&
               target.status == TargetStatus.ready

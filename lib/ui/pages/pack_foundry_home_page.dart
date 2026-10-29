@@ -93,6 +93,10 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
   final _roadmapSteps = <BuildRoadmapStep>[];
   final _projectChecks = <ProjectCheck>[];
   final _configPresets = <ConfigPreset>[];
+
+  /// Targets that were selected when their platform disappeared from the
+  /// project; they are selected again once the platform is back.
+  final _selectionsOfHiddenTargets = <BuildTarget>{};
   Timer? _metadataSaveTimer;
   Timer? _defaultsSaveTimer;
   bool _metadataListenersAttached = false;
@@ -200,6 +204,9 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
     setState(() {
       _workspaceIndex = index;
     });
+    if (index == 1) {
+      _refreshProjectPlatforms();
+    }
   }
 
   Future<void> _loadReleaseMetadata() async {
@@ -433,21 +440,44 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
   }
 
   /// Recomputes every target from the toolchain state and the selected
-  /// project. A target whose platform folder the project lacks cannot be
-  /// built at all, so it is disabled before the flutter tool fails on it.
+  /// project. A target whose platform the project lacks cannot be built at
+  /// all, so it is hidden; its selection comes back with the platform.
   void _updateTargetStatuses() {
     final projectPath = _projectPath;
     for (final target in _targets) {
       final missingPlatform =
           projectPath != null &&
           !ProjectPlatforms.supports(projectPath, target.platform);
-      target.status = missingPlatform
-          ? TargetStatus.missingPlatform
-          : _toolchainTargetStatus(target);
+      if (missingPlatform) {
+        if (target.selected) {
+          _selectionsOfHiddenTargets.add(target);
+        }
+        target
+          ..status = TargetStatus.missingPlatform
+          ..selected = false;
+        continue;
+      }
+      target.status = _toolchainTargetStatus(target);
+      if (_selectionsOfHiddenTargets.remove(target) && target.canSelect) {
+        target.selected = true;
+      }
       if (!target.canSelect) {
         target.selected = false;
       }
     }
+  }
+
+  /// Platforms can be added while PackFoundry is open, e.g. with
+  /// `flutter create --platforms=android .`, so they are checked again
+  /// whenever the Project workspace is shown.
+  void _refreshProjectPlatforms() {
+    if (_projectPath == null || _isBuilding) {
+      return;
+    }
+    setState(() {
+      _updateTargetStatuses();
+      _replaceRoadmapWithPreview();
+    });
   }
 
   TargetStatus _toolchainTargetStatus(BuildTarget target) {
@@ -1717,7 +1747,10 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       }
       if (projectMetadata.version != null &&
           _releaseTagController.text.trim().isEmpty) {
-        _releaseTagController.text = 'v${projectMetadata.version}';
+        // The version field edits major.minor.patch; the pubspec build
+        // number after `+` has no place in an installer version.
+        _releaseTagController.text =
+            'v${projectMetadata.version!.split('+').first}';
       }
       if (projectMetadata.description != null &&
           _descriptionController.text.trim().isEmpty) {
@@ -2108,6 +2141,7 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       _joinPath(projectPath, 'pubspec.yaml'),
     ).existsSync();
     final hasWindowsRunner = _hasWindowsRunner(projectPath);
+    final hasAndroid = ProjectPlatforms.supports(projectPath, 'Android');
     final hasVersion = metadata.version != null && metadata.version!.isNotEmpty;
     final hasDescription =
         metadata.description != null && metadata.description!.isNotEmpty;
@@ -2119,6 +2153,8 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       ),
       if (hasWindowsRunner)
         ProjectCheck(label: l10n.windowsRunnerFound, tone: ChipTone.good),
+      if (hasAndroid)
+        ProjectCheck(label: l10n.androidManifestFound, tone: ChipTone.good),
       ProjectCheck(
         label: hasVersion
             ? l10n.projectVersionFound

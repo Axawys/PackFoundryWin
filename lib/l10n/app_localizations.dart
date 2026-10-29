@@ -74,6 +74,8 @@ class AppLocalizations {
       _isRu ? 'pubspec.yaml не найден' : 'pubspec.yaml missing';
   String get windowsRunnerFound =>
       _isRu ? 'Windows runner найден' : 'Windows runner found';
+  String get androidManifestFound =>
+      _isRu ? 'Android-манифест найден' : 'Android manifest found';
   String get projectVersionFound => _isRu ? 'Версия найдена' : 'Version found';
   String get projectVersionMissing =>
       _isRu ? 'Версия не указана' : 'Version missing';
@@ -121,7 +123,9 @@ class AppLocalizations {
 
   String get applicationName =>
       _isRu ? 'Название приложения' : 'Application name';
-  String get releaseTag => _isRu ? 'Тег релиза' : 'Release tag';
+  String get versionMajor => _isRu ? 'Мажорная' : 'Major';
+  String get versionMinor => _isRu ? 'Минорная' : 'Minor';
+  String get versionPatch => _isRu ? 'Патч' : 'Patch';
   String get developerEmail => _isRu ? 'Почта разработчика' : 'Developer email';
   String get publisherName =>
       _isRu ? 'Разработчик / издатель' : 'Developer / publisher';
@@ -233,9 +237,9 @@ class AppLocalizations {
         : 'Could not install tools. $detail';
   }
 
-  String targetMissingPlatform(String folder) => _isRu
-      ? 'Нет папки $folder\\ в проекте — flutter create --platforms=$folder .'
-      : 'No $folder\\ folder in the project — flutter create --platforms=$folder .';
+  String get noProjectPlatforms => _isRu
+      ? 'У проекта нет ни Windows, ни Android. Добавьте платформу: flutter create --platforms=windows,android .'
+      : 'The project has neither Windows nor Android. Add a platform: flutter create --platforms=windows,android .';
   String get buildScriptTargetHint => _isRu
       ? 'Скрипт для сборки setup.exe на любом Windows-компьютере'
       : 'Script that builds setup.exe on any Windows machine';
