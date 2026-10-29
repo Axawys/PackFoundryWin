@@ -1,0 +1,404 @@
+import 'dart:io';
+
+import '../models/build_configuration.dart';
+import 'windows_tools.dart';
+
+/// Release metadata shared by the Inno Setup script and the build script.
+class WindowsInstallerMetadata {
+  const WindowsInstallerMetadata({
+    required this.appName,
+    required this.version,
+    required this.publisher,
+    required this.homepage,
+    required this.email,
+    required this.license,
+    required this.description,
+    required this.exeName,
+    required this.outputBaseName,
+  });
+
+  factory WindowsInstallerMetadata.fromConfiguration(
+    BuildConfiguration configuration,
+  ) {
+    final appName = displayAppName(configuration.appName);
+    final version = releaseVersion(configuration.releaseTag);
+    return WindowsInstallerMetadata(
+      appName: appName,
+      version: version,
+      publisher: configuration.publisherName.trim().isEmpty
+          ? appName
+          : configuration.publisherName.trim(),
+      homepage: configuration.homepageUrl.trim(),
+      email: configuration.developerEmail.trim(),
+      license: configuration.license.trim(),
+      description: _singleLine(configuration.description),
+      exeName: windowsExecutableName(configuration.projectPath),
+      outputBaseName: setupBaseName(appName: appName, version: version),
+    );
+  }
+
+  final String appName;
+
+  /// Version without a leading `v`, e.g. `1.3.0` for the tag `v1.3.0`.
+  final String version;
+  final String publisher;
+  final String homepage;
+  final String email;
+  final String license;
+  final String description;
+
+  /// File name of the Flutter runner, `BINARY_NAME` from windows/CMakeLists.
+  final String exeName;
+
+  /// Installer file name without `.exe`.
+  final String outputBaseName;
+
+  String get setupFileName => '$outputBaseName.exe';
+
+  static String displayAppName(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? 'Flutter App' : trimmed;
+  }
+
+  static String releaseVersion(String tag) {
+    final trimmed = tag.trim();
+    if (trimmed.isEmpty) {
+      return '1.0.0';
+    }
+    if (trimmed.length > 1 &&
+        (trimmed.startsWith('v') || trimmed.startsWith('V')) &&
+        RegExp(r'\d').hasMatch(trimmed[1])) {
+      return trimmed.substring(1);
+    }
+    return trimmed;
+  }
+
+  /// `AppName_windows_1.3.0_x64_setup`, following the PackFoundry artifact
+  /// naming scheme.
+  static String setupBaseName({
+    required String appName,
+    required String version,
+  }) {
+    return [
+      safeFileName(appName),
+      'windows',
+      safeFileName(version),
+      'x64',
+      'setup',
+    ].join('_');
+  }
+
+  /// Replaces characters Windows does not allow in file names.
+  static String safeFileName(String value) {
+    final fileName = value
+        .trim()
+        .replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F]+'), '-')
+        .replaceAll(RegExp(r'[. ]+$'), '');
+    return fileName.isEmpty ? 'Flutter App' : fileName;
+  }
+
+  /// Reads `set(BINARY_NAME "...")` from the project's Windows CMake file.
+  static String windowsExecutableName(String projectPath) {
+    final file = File(
+      '$projectPath${Platform.pathSeparator}windows'
+      '${Platform.pathSeparator}CMakeLists.txt',
+    );
+    if (file.existsSync()) {
+      final match = RegExp(
+        r'set\s*\(\s*BINARY_NAME\s+"([^"]+)"\s*\)',
+      ).firstMatch(file.readAsStringSync());
+      final name = match?.group(1)?.trim();
+      if (name != null && name.isNotEmpty) {
+        return '$name.exe';
+      }
+    }
+    return 'app.exe';
+  }
+
+  static String _singleLine(String value) {
+    return value.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+}
+
+/// Generates `setup.iss` and `build_setup.cmd`.
+///
+/// The Inno Setup script takes the runner folder, the executable name and the
+/// output folder as `/D` defines, so the same file works for the build inside
+/// PackFoundry and for the exported script on another machine.
+class WindowsInstallerFiles {
+  const WindowsInstallerFiles();
+
+  static const issFileName = 'setup.iss';
+  static const iconFileName = 'setup.ico';
+  static const licenseFileName = 'license.txt';
+  static const scriptFileName = 'build_setup.cmd';
+
+  /// Relative to the project folder.
+  static const releaseFolder = r'build\windows\x64\runner\Release';
+
+  /// Contents of `setup.iss`. [hasIcon] and [hasLicenseFile] say whether
+  /// [iconFileName] and [licenseFileName] lie next to the script.
+  String innoSetupScript(
+    WindowsInstallerMetadata metadata, {
+    required bool hasIcon,
+    required bool hasLicenseFile,
+  }) {
+    final versionInfo = RegExp(r'^\d+(\.\d+){0,3}$').hasMatch(metadata.version)
+        ? metadata.version
+        : null;
+    final comments = [
+      if (metadata.description.isNotEmpty) metadata.description,
+      if (metadata.license.isNotEmpty) 'License: ${metadata.license}',
+    ].join(' ');
+    final lines = <String>[
+      '; Generated by PackFoundry. Compile with:',
+      ';   ISCC.exe /DSourceDir=<runner Release folder> '
+          '/DMyAppExeName=<app.exe> /O<output folder> setup.iss',
+      '',
+      '#define MyAppName "${_define(metadata.appName)}"',
+      '#define MyAppVersion "${_define(metadata.version)}"',
+      '#define MyAppPublisher "${_define(metadata.publisher)}"',
+      '#ifndef MyAppExeName',
+      '  #define MyAppExeName "${_define(metadata.exeName)}"',
+      '#endif',
+      '#ifndef SourceDir',
+      '  #define SourceDir "..\\$releaseFolder"',
+      '#endif',
+      '#ifndef OutputDir',
+      '  #define OutputDir "output"',
+      '#endif',
+      '',
+      '[Setup]',
+      'AppId={{${_directive(_appId(metadata.appName))}}',
+      'AppName={#MyAppName}',
+      'AppVersion={#MyAppVersion}',
+      'AppVerName={#MyAppName} {#MyAppVersion}',
+      'AppPublisher={#MyAppPublisher}',
+      if (metadata.homepage.isNotEmpty) ...[
+        'AppPublisherURL=${_directive(metadata.homepage)}',
+        'AppSupportURL=${_directive(metadata.homepage)}',
+        'AppUpdatesURL=${_directive(metadata.homepage)}',
+      ],
+      if (metadata.email.isNotEmpty) 'AppContact=${_directive(metadata.email)}',
+      if (comments.isNotEmpty) 'AppComments=${_directive(comments)}',
+      if (versionInfo != null) 'VersionInfoVersion=$versionInfo',
+      'VersionInfoProductName={#MyAppName}',
+      'VersionInfoCompany={#MyAppPublisher}',
+      'DefaultDirName={autopf}\\{#MyAppName}',
+      'DefaultGroupName={#MyAppName}',
+      'DisableProgramGroupPage=yes',
+      'PrivilegesRequiredOverridesAllowed=dialog',
+      if (hasLicenseFile) 'LicenseFile=$licenseFileName',
+      'OutputDir={#OutputDir}',
+      'OutputBaseFilename=${_directive(metadata.outputBaseName)}',
+      if (hasIcon) 'SetupIconFile=$iconFileName',
+      'UninstallDisplayIcon={app}\\{#MyAppExeName}',
+      'Compression=lzma2',
+      'SolidCompression=yes',
+      'WizardStyle=modern',
+      'ArchitecturesAllowed=x64compatible',
+      'ArchitecturesInstallIn64BitMode=x64compatible',
+      '',
+      '[Languages]',
+      'Name: "english"; MessagesFile: "compiler:Default.isl"',
+      'Name: "russian"; MessagesFile: "compiler:Languages\\Russian.isl"',
+      '',
+      '[Tasks]',
+      'Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; '
+          'GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked',
+      '',
+      '[Files]',
+      'Source: "{#SourceDir}\\*"; DestDir: "{app}"; '
+          'Flags: ignoreversion recursesubdirs createallsubdirs',
+      '',
+      '[Icons]',
+      'Name: "{autoprograms}\\{#MyAppName}"; Filename: "{app}\\{#MyAppExeName}"',
+      'Name: "{autodesktop}\\{#MyAppName}"; Filename: "{app}\\{#MyAppExeName}"; '
+          'Tasks: desktopicon',
+      '',
+      '[Run]',
+      'Filename: "{app}\\{#MyAppExeName}"; '
+          'Description: "{cm:LaunchProgram,{#StringChange(MyAppName, \'&\', \'&&\')}}"; '
+          'Flags: nowait postinstall skipifsilent',
+      '',
+    ];
+    return lines.join('\r\n');
+  }
+
+  /// Contents of `build_setup.cmd`, a double-clickable script that checks the
+  /// tools, builds the Flutter project and compiles [issFileName] next to it.
+  /// [projectPath] is the default project folder; the first argument or a
+  /// pubspec.yaml next to the script take precedence.
+  String buildScript(
+    WindowsInstallerMetadata metadata, {
+    required String projectPath,
+  }) {
+    final lines = <String>[
+      '@echo off',
+      'rem Generated by PackFoundry: builds ${_comment(metadata.appName)} and its setup.exe.',
+      'rem Usage: build_setup.cmd [path\\to\\flutter\\project]',
+      'rem Set PACKFOUNDRY_NO_PAUSE=1 to skip the final pause.',
+      'setlocal EnableExtensions DisableDelayedExpansion',
+      'chcp 65001 >nul',
+      'set "SCRIPT_DIR=%~dp0"',
+      'set "APP_NAME=${_cmdValue(metadata.appName)}"',
+      'set "APP_EXE=${_cmdValue(metadata.exeName)}"',
+      'set "SETUP_NAME=${_cmdValue(metadata.setupFileName)}"',
+      'set "OUTPUT_DIR=%SCRIPT_DIR%output"',
+      'set "EXIT_CODE=0"',
+      'title Building %APP_NAME% setup',
+      '',
+      'set "PROJECT_DIR=%~1"',
+      'if not defined PROJECT_DIR if exist "%SCRIPT_DIR%pubspec.yaml" set "PROJECT_DIR=%SCRIPT_DIR%."',
+      'if not defined PROJECT_DIR set "PROJECT_DIR=${_cmdValue(projectPath)}"',
+      'if not exist "%PROJECT_DIR%\\pubspec.yaml" goto :no_project',
+      'if not exist "%SCRIPT_DIR%$issFileName" goto :no_iss',
+      '',
+      'echo === Checking build tools ===',
+      'set "MISSING=0"',
+      'set "HINT_FLUTTER=Install it from ${WindowsTools.flutterUrl} and add flutter\\bin to PATH."',
+      'set "HINT_GIT=Run: ${WindowsTools.gitWinget}   or download ${WindowsTools.gitUrl}"',
+      'set "HINT_VS=Run: ${WindowsTools.visualStudioWinget}   or download ${WindowsTools.visualStudioUrl}"',
+      'set "HINT_ISCC=Run: ${WindowsTools.innoSetupWinget}   or download ${WindowsTools.innoSetupUrl}"',
+      '',
+      'set "FLUTTER="',
+      'for %%I in (flutter.bat) do set "FLUTTER=%%~\$PATH:I"',
+      'if not defined FLUTTER if defined FLUTTER_ROOT if exist "%FLUTTER_ROOT%\\bin\\flutter.bat" set "FLUTTER=%FLUTTER_ROOT%\\bin\\flutter.bat"',
+      'if not defined FLUTTER if exist "%LOCALAPPDATA%\\PackFoundry\\flutter\\bin\\flutter.bat" set "FLUTTER=%LOCALAPPDATA%\\PackFoundry\\flutter\\bin\\flutter.bat"',
+      'if not defined FLUTTER if exist "%USERPROFILE%\\flutter\\bin\\flutter.bat" set "FLUTTER=%USERPROFILE%\\flutter\\bin\\flutter.bat"',
+      'if not defined FLUTTER if exist "C:\\src\\flutter\\bin\\flutter.bat" set "FLUTTER=C:\\src\\flutter\\bin\\flutter.bat"',
+      'if defined FLUTTER echo [OK]      Flutter SDK: %FLUTTER%',
+      'if not defined FLUTTER call :missing "Flutter SDK" HINT_FLUTTER',
+      '',
+      'set "GIT="',
+      'for %%I in (git.exe) do set "GIT=%%~\$PATH:I"',
+      'if not defined GIT if exist "%ProgramFiles%\\Git\\cmd\\git.exe" set "GIT=%ProgramFiles%\\Git\\cmd\\git.exe"',
+      'if not defined GIT if exist "%LOCALAPPDATA%\\Programs\\Git\\cmd\\git.exe" set "GIT=%LOCALAPPDATA%\\Programs\\Git\\cmd\\git.exe"',
+      'if defined GIT echo [OK]      Git: %GIT%',
+      'if defined GIT for %%I in ("%GIT%") do set "PATH=%%~dpI;%PATH%"',
+      'if not defined GIT call :missing "Git" HINT_GIT',
+      '',
+      'set "VSWHERE=%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\vswhere.exe"',
+      'set "VS_PATH="',
+      'if exist "%VSWHERE%" for /f "usebackq delims=" %%P in (`call "%VSWHERE%" -products * -requires ${WindowsTools.vcToolsComponent} -latest -property installationPath`) do set "VS_PATH=%%P"',
+      'if defined VS_PATH echo [OK]      Visual Studio C++: %VS_PATH%',
+      'if not defined VS_PATH call :missing "Visual Studio with Desktop development with C++" HINT_VS',
+      '',
+      'set "ISCC="',
+      'for %%I in (ISCC.exe) do set "ISCC=%%~\$PATH:I"',
+      'if not defined ISCC if exist "%ProgramFiles(x86)%\\Inno Setup 6\\ISCC.exe" set "ISCC=%ProgramFiles(x86)%\\Inno Setup 6\\ISCC.exe"',
+      'if not defined ISCC if exist "%ProgramFiles%\\Inno Setup 6\\ISCC.exe" set "ISCC=%ProgramFiles%\\Inno Setup 6\\ISCC.exe"',
+      'if not defined ISCC if exist "%LOCALAPPDATA%\\Programs\\Inno Setup 6\\ISCC.exe" set "ISCC=%LOCALAPPDATA%\\Programs\\Inno Setup 6\\ISCC.exe"',
+      'if defined ISCC echo [OK]      Inno Setup: %ISCC%',
+      'if not defined ISCC call :missing "Inno Setup 6" HINT_ISCC',
+      '',
+      'reg query "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\AppModelUnlock" /v AllowDevelopmentWithoutDevLicense 2>nul | find "0x1" >nul',
+      'if errorlevel 1 echo [WARNING] Developer Mode is off. Projects with plugins need it: run "start ms-settings:developers" and enable it.',
+      '',
+      'if "%MISSING%"=="1" goto :tools_missing',
+      '',
+      'echo.',
+      'echo === flutter pub get ===',
+      'pushd "%PROJECT_DIR%" || goto :failed',
+      'call "%FLUTTER%" pub get',
+      'if errorlevel 1 goto :build_failed',
+      'echo.',
+      'echo === flutter build windows --release ===',
+      'call "%FLUTTER%" build windows --release',
+      'if errorlevel 1 goto :build_failed',
+      'popd',
+      '',
+      'set "RELEASE_DIR=%PROJECT_DIR%\\$releaseFolder"',
+      'if not exist "%RELEASE_DIR%\\%APP_EXE%" for %%F in ("%RELEASE_DIR%\\*.exe") do set "APP_EXE=%%~nxF"',
+      'if not exist "%RELEASE_DIR%\\%APP_EXE%" goto :no_exe',
+      '',
+      'echo.',
+      'echo === Compiling installer with Inno Setup ===',
+      '"%ISCC%" /Qp "/DSourceDir=%RELEASE_DIR%" "/DMyAppExeName=%APP_EXE%" "/O%OUTPUT_DIR%" "%SCRIPT_DIR%$issFileName"',
+      'if errorlevel 1 goto :iscc_failed',
+      'if not exist "%OUTPUT_DIR%\\%SETUP_NAME%" goto :iscc_failed',
+      '',
+      'echo.',
+      'echo [DONE] Installer: %OUTPUT_DIR%\\%SETUP_NAME%',
+      'goto :finish',
+      '',
+      ':missing',
+      'echo [MISSING] %~1',
+      'call echo           %%%~2%%',
+      'set "MISSING=1"',
+      'exit /b 0',
+      '',
+      ':no_project',
+      'echo [ERROR] No Flutter project at "%PROJECT_DIR%". Pass the project folder as the first argument.',
+      'goto :failed',
+      '',
+      ':no_iss',
+      'echo [ERROR] $issFileName was not found next to this script.',
+      'goto :failed',
+      '',
+      ':tools_missing',
+      'echo.',
+      'echo [ERROR] Install the missing tools above, open a new terminal and run this script again.',
+      'goto :failed',
+      '',
+      ':build_failed',
+      'popd',
+      'echo.',
+      'echo [ERROR] Flutter build failed, see the output above.',
+      'goto :failed',
+      '',
+      ':no_exe',
+      'echo [ERROR] No .exe was found in "%RELEASE_DIR%".',
+      'goto :failed',
+      '',
+      ':iscc_failed',
+      'echo.',
+      'echo [ERROR] Inno Setup could not compile the installer, see the output above.',
+      'goto :failed',
+      '',
+      ':failed',
+      'set "EXIT_CODE=1"',
+      '',
+      ':finish',
+      'echo.',
+      'if not "%PACKFOUNDRY_NO_PAUSE%"=="1" pause',
+      'exit /b %EXIT_CODE%',
+      '',
+    ];
+    return lines.join('\r\n');
+  }
+
+  /// `{{` stops Inno Setup from reading the id as a constant. The id only has
+  /// to be stable per application, so it is derived from the name.
+  String _appId(String appName) {
+    final slug = appName
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+        .replaceAll(RegExp(r'^-+|-+$'), '');
+    return '${slug.isEmpty ? 'flutter-app' : slug}-packfoundry';
+  }
+
+  /// A value inside an ISPP `#define "..."`. The text lands in [Setup]
+  /// directives, so braces are escaped as Inno constants as well.
+  String _define(String value) {
+    return value
+        .replaceAll('"', "'")
+        .replaceAll('{', '{{')
+        .replaceAll(RegExp(r'[\r\n]+'), ' ');
+  }
+
+  String _directive(String value) {
+    return value.replaceAll(RegExp(r'[\r\n]+'), ' ');
+  }
+
+  /// A value inside `set "NAME=value"`: percent signs must be doubled and
+  /// quotes cannot be escaped at all.
+  String _cmdValue(String value) {
+    return value
+        .replaceAll('%', '%%')
+        .replaceAll('"', "'")
+        .replaceAll(RegExp(r'[\r\n]+'), ' ');
+  }
+
+  String _comment(String value) => value.replaceAll(RegExp(r'[\r\n%]+'), ' ');
+}

@@ -295,10 +295,6 @@ class _ToolchainGroupCard extends StatelessWidget {
                           if (tool != group.tools.last)
                             const Divider(height: 20),
                         ],
-                      if (group.guideSteps.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        _ToolchainGuide(steps: group.guideSteps),
-                      ],
                     ],
                   ),
                 ),
@@ -560,67 +556,6 @@ class _InstallStepRow extends StatelessWidget {
               ),
             ),
         ],
-      ),
-    );
-  }
-}
-
-class _ToolchainGuide extends StatelessWidget {
-  const _ToolchainGuide({required this.steps});
-
-  final List<String> steps;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.menu_book_outlined,
-                  size: 18,
-                  color: colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  context.l10n.miniGuide,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            for (var index = 0; index < steps.length; index++) ...[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 22,
-                    child: Text(
-                      '${index + 1}.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  Expanded(child: Text(steps[index])),
-                ],
-              ),
-              if (index != steps.length - 1) const SizedBox(height: 6),
-            ],
-          ],
-        ),
       ),
     );
   }

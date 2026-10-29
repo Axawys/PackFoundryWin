@@ -22,7 +22,7 @@ class ProjectIconFinder {
   }
 
   String? _launcherIconsImage(String projectPath) {
-    final pubspec = File('$projectPath/pubspec.yaml');
+    final pubspec = File('$projectPath${Platform.pathSeparator}pubspec.yaml');
     if (!pubspec.existsSync()) {
       return null;
     }
@@ -34,12 +34,15 @@ class ProjectIconFinder {
     if (relativePath == null || !_isPng(relativePath)) {
       return null;
     }
-    final icon = File('$projectPath/$relativePath');
+    final icon = File(
+      '$projectPath${Platform.pathSeparator}'
+      '${relativePath.replaceAll('/', Platform.pathSeparator)}',
+    );
     return icon.existsSync() ? icon.path : null;
   }
 
   String? _bestAssetsPng(String projectPath) {
-    final assets = Directory('$projectPath/assets');
+    final assets = Directory('$projectPath${Platform.pathSeparator}assets');
     if (!assets.existsSync()) {
       return null;
     }

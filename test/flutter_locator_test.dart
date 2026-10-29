@@ -13,53 +13,52 @@ void main() {
   tearDown(() => root.delete(recursive: true));
 
   Future<File> fakeFlutter(String sdkFolder) async {
-    final file = File('${root.path}/$sdkFolder/bin/flutter');
+    final file = File('${root.path}\\$sdkFolder\\bin\\flutter.bat');
     await file.create(recursive: true);
     return file;
   }
 
+  Map<String, String> environment({String path = r'C:\Windows\System32'}) {
+    return {
+      'PATH': path,
+      'USERPROFILE': '${root.path}\\profile',
+      'LOCALAPPDATA': '${root.path}\\local',
+    };
+  }
+
   test('falls back to the managed SDK when flutter is not on PATH', () async {
-    final managed = await fakeFlutter('data/pack_foundry/flutter');
-    final locator = FlutterLocator(
-      environment: {
-        'PATH': '/usr/bin:/bin',
-        'HOME': '${root.path}/home',
-        'XDG_DATA_HOME': '${root.path}/data',
-      },
-    );
+    final managed = await fakeFlutter(r'local\PackFoundry\flutter');
+    final locator = FlutterLocator(environment: environment());
 
     expect(locator.find()?.path, managed.path);
+    expect(locator.managedExecutable.path, managed.path);
   });
 
   test('prefers flutter from PATH over other installs', () async {
     final onPath = await fakeFlutter('custom');
-    await fakeFlutter('home/development/flutter');
-    await fakeFlutter('data/pack_foundry/flutter');
+    await fakeFlutter(r'profile\flutter');
+    await fakeFlutter(r'local\PackFoundry\flutter');
     final locator = FlutterLocator(
-      environment: {
-        'PATH': '/usr/bin:${onPath.parent.path}',
-        'HOME': '${root.path}/home',
-        'XDG_DATA_HOME': '${root.path}/data',
-      },
+      environment: environment(
+        path: '${root.path}\\empty;"${onPath.parent.path}"',
+      ),
     );
 
     expect(locator.find()?.path, onPath.path);
   });
 
-  test('finds FLUTTER_ROOT and usual home folders', () async {
-    final inHome = await fakeFlutter('home/development/flutter');
-    final environment = {
-      'PATH': '/usr/bin',
-      'HOME': '${root.path}/home',
-      'XDG_DATA_HOME': '${root.path}/data',
-    };
-    expect(FlutterLocator(environment: environment).find()?.path, inHome.path);
+  test('finds FLUTTER_ROOT and usual profile folders', () async {
+    final inProfile = await fakeFlutter(r'profile\dev\flutter');
+    expect(
+      FlutterLocator(environment: environment()).find()?.path,
+      inProfile.path,
+    );
 
     final fromRoot = await fakeFlutter('sdk-root');
     expect(
       FlutterLocator(
         environment: {
-          ...environment,
+          ...environment(),
           'FLUTTER_ROOT': fromRoot.parent.parent.path,
         },
       ).find()?.path,
@@ -67,24 +66,23 @@ void main() {
     );
   });
 
-  test('returns null when no SDK exists', () {
+  test('reads environment variables case-insensitively', () async {
+    final onPath = await fakeFlutter('custom');
     final locator = FlutterLocator(
-      environment: {
-        'PATH': '${root.path}/empty',
-        'HOME': '${root.path}/home',
-        'XDG_DATA_HOME': '${root.path}/data',
-      },
+      environment: {'Path': onPath.parent.path, 'LocalAppData': root.path},
     );
 
-    expect(locator.find(), isNull);
+    expect(locator.find()?.path, onPath.path);
   });
 
   test('puts the SDK bin folder first on PATH for child processes', () {
-    final locator = FlutterLocator(environment: {'PATH': '/usr/bin:/bin'});
+    final locator = FlutterLocator(
+      environment: {'PATH': r'C:\Windows;C:\Tools'},
+    );
 
     expect(
-      locator.environmentFor(File('/opt/flutter/bin/flutter'))['PATH'],
-      '/opt/flutter/bin:/usr/bin:/bin',
+      locator.environmentFor(File(r'C:\flutter\bin\flutter.bat'))['PATH'],
+      r'C:\flutter\bin;C:\Windows;C:\Tools',
     );
   });
 }

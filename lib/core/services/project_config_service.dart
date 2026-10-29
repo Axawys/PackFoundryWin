@@ -40,14 +40,13 @@ class ProjectConfigService {
       windowWidth: config.windowWidth,
       windowHeight: config.windowHeight,
       packageTypes: config.packageTypes,
-      additionalDependencies: config.additionalDependencies,
     );
   }
 
   String? _resolvePath(String? path, String basePath) {
     if (path == null ||
         path == ProjectConfig.chooseInPackFoundry ||
-        path.startsWith('/') ||
+        path.startsWith(r"\\") ||
         RegExp(r'^[a-zA-Z]:[\\/]').hasMatch(path)) {
       return path;
     }

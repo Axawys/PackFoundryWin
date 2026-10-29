@@ -66,7 +66,7 @@ class InstallerSettingsPanel extends StatelessWidget {
           LayoutBuilder(
             builder: (context, constraints) {
               final columns = switch (constraints.maxWidth) {
-                >= 1000 => 4,
+                >= 900 => 3,
                 >= 560 => 2,
                 _ => 1,
               };
@@ -85,16 +85,13 @@ class InstallerSettingsPanel extends StatelessWidget {
                         target: target,
                         icon: _targetIcon(target),
                         title: target.displayLabel,
-                        // tar.gz is often mistaken for an installable
-                        // package, so say what it is instead of "ready".
                         subtitle: target.status == TargetStatus.missingPlatform
                             ? l10n.targetMissingPlatform(
                                 ProjectPlatforms.folderFor(target.platform) ??
                                     target.platform.toLowerCase(),
                               )
-                            : target.artifact == 'tar.gz bundle' &&
-                                  target.status == TargetStatus.ready
-                            ? l10n.tarGzTargetHint
+                            : target.artifact == BuildTarget.buildScript
+                            ? l10n.buildScriptTargetHint
                             : l10n.targetStatusLabel(target.status.name),
                         onChanged: (selected) => onChanged(target, selected),
                       ),
@@ -109,14 +106,10 @@ class InstallerSettingsPanel extends StatelessWidget {
   }
 
   IconData _targetIcon(BuildTarget target) {
-    return switch (target.platform) {
-      'Android' => Icons.android_outlined,
-      'Windows' => Icons.window_outlined,
-      'macOS' => Icons.laptop_mac_outlined,
-      'iOS' => Icons.phone_iphone_outlined,
-      _ when target.artifact == 'AppImage' => Icons.apps,
-      _ when target.artifact.contains('tar.gz') => Icons.archive_outlined,
-      _ => Icons.inventory_2_outlined,
+    return switch (target.artifact) {
+      BuildTarget.apk => Icons.android_outlined,
+      BuildTarget.buildScript => Icons.terminal_outlined,
+      _ => Icons.install_desktop_outlined,
     };
   }
 }

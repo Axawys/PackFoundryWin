@@ -10,21 +10,19 @@ import '../../core/models/build_configuration.dart';
 import '../../core/models/build_log_entry.dart';
 import '../../core/models/build_target.dart';
 import '../../core/models/chip_tone.dart';
-import '../../core/models/builder_environment.dart';
 import '../../core/models/config_preset.dart';
-import '../../core/models/package_inspection.dart';
 import '../../core/models/project_config.dart';
 import '../../core/models/tool_status.dart';
 import '../../core/services/android_device_service.dart';
 import '../../core/services/app_preferences.dart';
 import '../../core/services/build_service.dart';
-import '../../core/services/builder_environment_service.dart';
 import '../../core/services/flutter_locator.dart';
-import '../../core/services/package_inspector_service.dart';
 import '../../core/services/project_config_service.dart';
 import '../../core/services/project_icon_finder.dart';
 import '../../core/services/project_platforms.dart';
 import '../../core/services/toolchain_service.dart';
+import '../../core/services/windows_installer_files.dart';
+import '../../core/services/windows_tools.dart';
 import '../../l10n/app_localizations.dart';
 import '../widgets/app_settings_panel.dart';
 import '../widgets/build_panel.dart';
@@ -32,8 +30,6 @@ import '../widgets/config_presets_panel.dart';
 import '../widgets/preferences_panel.dart';
 import '../widgets/project_panel.dart';
 import '../widgets/installer_settings_panel.dart';
-import '../widgets/package_dependencies_panel.dart';
-import '../widgets/package_inspector_panel.dart';
 import '../widgets/toolchain_panel.dart';
 import '../widgets/welcome_dialog.dart';
 
@@ -64,12 +60,10 @@ class PackFoundryHomePage extends StatefulWidget {
 class _PackFoundryHomePageState extends State<PackFoundryHomePage>
     with SingleTickerProviderStateMixin {
   static const _defaultAppName = 'My Flutter App';
-  static const _workspaceCount = 4;
+  static const _workspaceCount = 3;
 
   final _buildService = BuildService();
   final _toolchainService = ToolchainService();
-  final _builderService = BuilderEnvironmentService();
-  final _packageInspectorService = const PackageInspectorService();
   final _projectConfigService = const ProjectConfigService();
   final _androidDeviceService = AndroidDeviceService();
   final _appPreferences = AppPreferences();
@@ -87,11 +81,6 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
   final _heightController = TextEditingController(
     text: _WindowSize.packFoundryDefault.height.toString(),
   );
-  final _debAdditionalDependenciesController = TextEditingController();
-  final _rpmAdditionalDependenciesController = TextEditingController();
-  final _pacmanAdditionalDependenciesController = TextEditingController();
-  final _packageMetadataController = TextEditingController();
-  final _packageDependenciesController = TextEditingController();
   final _buildLog = <BuildLogEntry>[];
   final _roadmapSteps = <BuildRoadmapStep>[];
   final _projectChecks = <ProjectCheck>[];
@@ -108,7 +97,6 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
   bool _iconAutoDetected = false;
   String? _outputPath;
   String? _defaultOutputPath;
-  PackageInspection? _packageInspection;
   bool _isBuilding = false;
   bool _isRunningProject = false;
 
@@ -122,7 +110,6 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
   String? _sendToDeviceStatus;
   Process? _sendToDeviceProcess;
   bool _sendToDeviceCancelled = false;
-  bool _isInspectingPackage = false;
   ToolchainInstallTarget? _installingToolTarget;
   int _buildProgress = 0;
   bool _welcomeDialogShown = false;
@@ -130,63 +117,33 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
   late final TabController _workspaceTabController;
   ToolAvailability _flutterStatus = ToolAvailability.available;
   ToolAvailability _gitStatus = ToolAvailability.available;
-  ToolAvailability _archiveToolsStatus = ToolAvailability.available;
-  ToolAvailability _linuxToolchainStatus = ToolAvailability.available;
-  ToolAvailability _containerRuntimeStatus = ToolAvailability.available;
-  String? _containerRuntimeName;
+  ToolAvailability _visualStudioStatus = ToolAvailability.available;
+  ToolAvailability _innoSetupStatus = ToolAvailability.available;
+  ToolAvailability _developerModeStatus = ToolAvailability.available;
+  ToolAvailability _javaStatus = ToolAvailability.available;
+  ToolAvailability _androidSdkStatus = ToolAvailability.available;
   ToolInstallProgress? _installProgress;
   bool _toolInstallCancelRequested = false;
-  ToolAvailability _debBuilderStatus = ToolAvailability.available;
-  ToolAvailability _rpmBuilderStatus = ToolAvailability.available;
-  ToolAvailability _appImageToolStatus = ToolAvailability.available;
-  ToolAvailability _debToolStatus = ToolAvailability.available;
-  ToolAvailability _rpmToolStatus = ToolAvailability.available;
-  ToolAvailability _makepkgStatus = ToolAvailability.available;
 
   /// False until the first toolchain probe finishes; targets keep their
   /// optimistic defaults until then.
   bool _toolchainChecked = false;
-  ToolAvailability _fakerootStatus = ToolAvailability.available;
-  ToolAvailability _tarToolStatus = ToolAvailability.available;
-  ToolAvailability _zipToolStatus = ToolAvailability.available;
-  ToolAvailability _javaStatus = ToolAvailability.available;
-  ToolAvailability _androidSdkStatus = ToolAvailability.available;
   Process? _runningProjectProcess;
 
   final List<BuildTarget> _targets = [
     BuildTarget(
-      platform: 'Linux',
-      artifact: 'AppImage',
-      status: TargetStatus.ready,
-    ),
-    BuildTarget(
-      platform: 'Linux',
-      artifact: 'deb package',
-      status: TargetStatus.ready,
-    ),
-    BuildTarget(
-      platform: 'Linux',
-      artifact: 'rpm package',
-      status: TargetStatus.ready,
-    ),
-    BuildTarget(
-      platform: 'Linux',
-      artifact: 'pacman package',
-      status: TargetStatus.ready,
-    ),
-    BuildTarget(
-      platform: 'Linux',
-      artifact: 'tar.gz bundle',
+      platform: 'Windows',
+      artifact: BuildTarget.setupExe,
       status: TargetStatus.ready,
     ),
     BuildTarget(
       platform: 'Windows',
-      artifact: 'Inno Setup exe',
-      status: TargetStatus.installable,
+      artifact: BuildTarget.buildScript,
+      status: TargetStatus.ready,
     ),
     BuildTarget(
       platform: 'Android',
-      artifact: 'APK',
+      artifact: BuildTarget.apk,
       status: TargetStatus.installable,
     ),
   ];
@@ -290,23 +247,14 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
   }
 
   Future<void> _refreshToolchainStatus() async {
-    final runtime = await _builderService.resolveRuntime();
     final results = await Future.wait([
       _toolchainService.flutterAvailability(),
-      _linuxToolchainAvailable(),
-      _builderService.builderAvailability(BuilderEnvironment.debBookworm),
-      _builderService.builderAvailability(BuilderEnvironment.rpmFedora),
-      _toolchainService.appImageToolAvailability(),
-      _toolchainService.commandAvailability('dpkg-deb', ['--version']),
-      _toolchainService.commandAvailability('rpmbuild', ['--version']),
-      _toolchainService.commandAvailability('tar', ['--version']),
-      _toolchainService.commandAvailability('zip', ['--version']),
-      _toolchainService.commandAvailability('java', ['-version']),
+      _toolchainService.gitAvailability(),
+      _toolchainService.visualStudioAvailability(),
+      _toolchainService.innoSetupAvailability(),
+      _toolchainService.developerModeAvailability(),
       _toolchainService.androidSdkAvailability(),
-      _toolchainService.commandAvailability('git', ['--version']),
-      _archiveToolsAvailable(),
-      _toolchainService.commandAvailability('makepkg', ['--version']),
-      _toolchainService.commandAvailability('fakeroot', ['--version']),
+      _toolchainService.javaAvailability(),
     ]);
 
     if (!mounted) {
@@ -315,24 +263,12 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
 
     setState(() {
       _flutterStatus = results[0];
-      _linuxToolchainStatus = results[1];
-      _containerRuntimeStatus = runtime == null
-          ? ToolAvailability.missing
-          : ToolAvailability.installed;
-      _containerRuntimeName = runtime?.displayName;
-      _debBuilderStatus = results[2];
-      _rpmBuilderStatus = results[3];
-      _appImageToolStatus = results[4];
-      _debToolStatus = results[5];
-      _rpmToolStatus = results[6];
-      _tarToolStatus = results[7];
-      _zipToolStatus = results[8];
-      _javaStatus = results[9];
-      _androidSdkStatus = results[10];
-      _gitStatus = results[11];
-      _archiveToolsStatus = results[12];
-      _makepkgStatus = results[13];
-      _fakerootStatus = results[14];
+      _gitStatus = results[1];
+      _visualStudioStatus = results[2];
+      _innoSetupStatus = results[3];
+      _developerModeStatus = results[4];
+      _androidSdkStatus = results[5];
+      _javaStatus = results[6];
       _toolchainChecked = true;
       _updateTargetStatuses();
     });
@@ -357,50 +293,22 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
   }
 
   TargetStatus _toolchainTargetStatus(BuildTarget target) {
-    if (target.platform == 'Windows') {
-      return TargetStatus.installable;
+    // The script is only written to disk; the machine that runs it checks
+    // its own tools.
+    if (target.artifact == BuildTarget.buildScript) {
+      return TargetStatus.ready;
     }
     if (!_toolchainChecked) {
       return target.platform == 'Android'
           ? TargetStatus.installable
           : TargetStatus.ready;
     }
-    if (target.platform == 'Android') {
-      return _androidBuildStatus == ToolAvailability.installed
-          ? TargetStatus.ready
-          : TargetStatus.installable;
-    }
-    // pacman packages are built natively with makepkg, so only Arch-based
-    // hosts can produce them.
-    if (target.artifact == 'pacman package') {
-      if (_hostDistribution.family != _LinuxDistributionFamily.arch) {
-        return TargetStatus.hostLimited;
-      }
-      return _makepkgStatus == ToolAvailability.installed &&
-              _fakerootStatus == ToolAvailability.installed
-          ? TargetStatus.ready
-          : TargetStatus.installable;
-    }
-    return TargetStatus.ready;
-  }
-
-  Future<ToolAvailability> _linuxToolchainAvailable() async {
-    final available = await _toolchainService.allCommandsAvailable([
-      const CommandCheck('clang', ['--version']),
-      const CommandCheck('cmake', ['--version']),
-      const CommandCheck('ninja', ['--version']),
-    ]);
-    return available ? ToolAvailability.installed : ToolAvailability.missing;
-  }
-
-  /// Utilities the flutter tool itself needs to fetch the Dart SDK and engine.
-  Future<ToolAvailability> _archiveToolsAvailable() async {
-    final available = await _toolchainService.allCommandsAvailable([
-      const CommandCheck('curl', ['--version']),
-      const CommandCheck('unzip', ['-v']),
-      const CommandCheck('xz', ['--version']),
-    ]);
-    return available ? ToolAvailability.installed : ToolAvailability.missing;
+    final status = target.platform == 'Android'
+        ? _androidBuildStatus
+        : _windowsBuildStatus;
+    return status == ToolAvailability.installed
+        ? TargetStatus.ready
+        : TargetStatus.installable;
   }
 
   @override
@@ -451,21 +359,8 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
   }
 
   List<ToolchainGroup> _toolGroups(AppLocalizations l10n) {
-    final distribution = _hostDistribution;
-    final debGroup = _debBuildGroup(l10n, distribution);
-    final rpmGroup = _rpmBuildGroup(l10n, distribution);
-    final pacmanGroup = _pacmanBuildGroup(l10n, distribution);
-    final nativePackageGroups = switch (distribution.family) {
-      _LinuxDistributionFamily.deb => [debGroup, rpmGroup, pacmanGroup],
-      _LinuxDistributionFamily.arch => [pacmanGroup, rpmGroup, debGroup],
-      _ => [rpmGroup, debGroup, pacmanGroup],
-    };
-
     return [
       _commonToolsGroup(l10n),
-      ...nativePackageGroups,
-      _appImageBuildGroup(l10n),
-      _tarGzBuildGroup(l10n),
       _windowsBuildGroup(l10n),
       _androidBuildGroup(l10n),
     ];
@@ -480,18 +375,17 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       installTarget: ToolchainInstallTarget.common,
       installProgress: _installProgressFor(ToolchainInstallTarget.common),
       tools: [
-        _flutterTool(l10n),
         ToolStatus(
-          name: 'Git',
-          command: 'git',
-          status: _gitStatus,
-          note: l10n.gitNote,
+          name: 'Flutter SDK',
+          command: 'flutter.bat',
+          status: _flutterStatus,
+          note: l10n.flutterSdkNote,
         ),
         ToolStatus(
-          name: l10n.archiveToolsName,
-          command: 'curl, unzip, xz',
-          status: _archiveToolsStatus,
-          note: l10n.archiveToolsNote,
+          name: 'Git',
+          command: 'git.exe',
+          status: _gitStatus,
+          note: l10n.gitNote,
         ),
       ],
     );
@@ -501,245 +395,48 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
     return _installProgress?.target == target ? _installProgress : null;
   }
 
-  /// Platform groups that build on the host need the common Flutter SDK.
+  /// Platform groups need the common Flutter SDK as well.
   String? _commonToolsDependencyNote(AppLocalizations l10n) {
     return _commonToolsStatus == ToolAvailability.installed
         ? null
         : l10n.requiresCommonTools;
   }
 
-  ToolchainGroup _debBuildGroup(
-    AppLocalizations l10n,
-    _HostDistribution distribution,
-  ) {
-    final isNativeDeb = distribution.family == _LinuxDistributionFamily.deb;
-    final tools = isNativeDeb
-        ? [
-            _hostSystemTool(l10n, distribution),
-            _linuxToolchainTool(l10n),
-            ToolStatus(
-              name: 'dpkg-deb',
-              command: 'dpkg-deb',
-              status: _debToolStatus,
-              note: l10n.dpkgDebNote,
-            ),
-          ]
-        : [
-            ToolStatus(
-              name: _containerRuntimeName ?? 'Container runtime',
-              command:
-                  _containerRuntimeName?.toLowerCase() ?? 'docker or podman',
-              status: _containerRuntimeStatus,
-              note: l10n.dockerDebNote,
-              showCommand: false,
-            ),
-            ToolStatus(
-              name: 'Debian builder',
-              command: BuilderEnvironment.debBookworm.imageTag,
-              status: _debBuilderStatus,
-              note: l10n.debianBuilderNote,
-            ),
-          ];
-
-    return ToolchainGroup(
-      title: l10n.debBuildGroupTitle,
-      subtitle: isNativeDeb
-          ? l10n.debBuildNativeSubtitle(distribution.name)
-          : l10n.debBuildDockerSubtitle(distribution.name),
-      status: isNativeDeb ? _nativeDebBuildStatus : _dockerDebBuildStatus,
-      tools: tools,
-      installTarget: ToolchainInstallTarget.deb,
-      canRemove:
-          !isNativeDeb && _debBuilderStatus == ToolAvailability.installed,
-      installProgress: _installProgressFor(ToolchainInstallTarget.deb),
-      dependencyNote: isNativeDeb ? _commonToolsDependencyNote(l10n) : null,
-      installSizeLabel:
-          !isNativeDeb && _debBuilderStatus != ToolAvailability.installed
-          ? '~5 GB'
-          : null,
-    );
-  }
-
-  ToolchainGroup _rpmBuildGroup(
-    AppLocalizations l10n,
-    _HostDistribution distribution,
-  ) {
-    final isNativeRpm = distribution.family == _LinuxDistributionFamily.rpm;
-    final unsupportedRpm =
-        distribution.family == _LinuxDistributionFamily.unsupportedRpm;
-
-    return ToolchainGroup(
-      title: l10n.rpmBuildGroupTitle,
-      subtitle: unsupportedRpm
-          ? l10n.rpmBuildUnsupportedSubtitle(distribution.name)
-          : isNativeRpm
-          ? l10n.rpmBuildNativeSubtitle(distribution.name)
-          : l10n.rpmBuildDockerSubtitle(distribution.name),
-      status: unsupportedRpm
-          ? ToolAvailability.missing
-          : isNativeRpm
-          ? _nativeRpmBuildStatus
-          : _dockerRpmBuildStatus,
-      installTarget: ToolchainInstallTarget.rpm,
-      canRemove:
-          !isNativeRpm &&
-          !unsupportedRpm &&
-          _rpmBuilderStatus == ToolAvailability.installed,
-      installProgress: _installProgressFor(ToolchainInstallTarget.rpm),
-      dependencyNote: isNativeRpm ? _commonToolsDependencyNote(l10n) : null,
-      installSizeLabel:
-          !isNativeRpm &&
-              !unsupportedRpm &&
-              _rpmBuilderStatus != ToolAvailability.installed
-          ? '~5 GB'
-          : null,
-      tools: [
-        if (isNativeRpm) ...[
-          _hostSystemTool(l10n, distribution),
-          _linuxToolchainTool(l10n),
-          ToolStatus(
-            name: 'rpmbuild',
-            command: 'rpmbuild',
-            status: _rpmToolStatus,
-            note: l10n.rpmBuildToolNote,
-          ),
-        ] else if (unsupportedRpm) ...[
-          _hostSystemTool(l10n, distribution),
-          ToolStatus(
-            name: l10n.hostRpmCompatibilityToolName,
-            command: distribution.id,
-            status: ToolAvailability.missing,
-            note: l10n.hostRpmCompatibilityToolNote,
-          ),
-        ] else ...[
-          ToolStatus(
-            name: _containerRuntimeName ?? 'Container runtime',
-            command: _containerRuntimeName?.toLowerCase() ?? 'docker or podman',
-            status: _containerRuntimeStatus,
-            note: l10n.dockerRpmNote,
-            showCommand: false,
-          ),
-          ToolStatus(
-            name: 'Fedora builder',
-            command: BuilderEnvironment.rpmFedora.imageTag,
-            status: _rpmBuilderStatus,
-            note: l10n.rpmBuilderNote,
-          ),
-        ],
-      ],
-    );
-  }
-
-  ToolchainGroup _pacmanBuildGroup(
-    AppLocalizations l10n,
-    _HostDistribution distribution,
-  ) {
-    final isArch = distribution.family == _LinuxDistributionFamily.arch;
-    return ToolchainGroup(
-      title: l10n.pacmanBuildGroupTitle,
-      subtitle: isArch
-          ? l10n.pacmanBuildNativeSubtitle(distribution.name)
-          : l10n.pacmanBuildUnsupportedSubtitle(distribution.name),
-      status: isArch ? _pacmanBuildStatus : ToolAvailability.missing,
-      installTarget: ToolchainInstallTarget.pacman,
-      installProgress: _installProgressFor(ToolchainInstallTarget.pacman),
-      dependencyNote: isArch ? _commonToolsDependencyNote(l10n) : null,
-      tools: [
-        _hostSystemTool(l10n, distribution),
-        if (isArch) ...[
-          _linuxToolchainTool(l10n),
-          ToolStatus(
-            name: 'makepkg',
-            command: 'makepkg',
-            status: _makepkgStatus,
-            note: l10n.makepkgNote,
-          ),
-          ToolStatus(
-            name: 'fakeroot',
-            command: 'fakeroot',
-            status: _fakerootStatus,
-            note: l10n.fakerootNote,
-          ),
-        ] else
-          ToolStatus(
-            name: l10n.hostPacmanCompatibilityToolName,
-            command: distribution.id,
-            status: ToolAvailability.missing,
-            note: l10n.hostPacmanCompatibilityToolNote,
-          ),
-      ],
-    );
-  }
-
-  ToolchainGroup _appImageBuildGroup(AppLocalizations l10n) {
-    return ToolchainGroup(
-      title: l10n.appImageBuildGroupTitle,
-      subtitle: l10n.appImageBuildGroupSubtitle,
-      status: _appImageBuildStatus,
-      installTarget: ToolchainInstallTarget.appImage,
-      installProgress: _installProgressFor(ToolchainInstallTarget.appImage),
-      dependencyNote: _commonToolsDependencyNote(l10n),
-      tools: [
-        _linuxToolchainTool(l10n),
-        ToolStatus(
-          name: 'AppImageTool',
-          command: 'appimagetool',
-          status: _appImageToolStatus,
-          note: l10n.appImageToolNote,
-        ),
-      ],
-    );
-  }
-
-  ToolchainGroup _tarGzBuildGroup(AppLocalizations l10n) {
-    return ToolchainGroup(
-      title: l10n.tarGzBuildGroupTitle,
-      subtitle: l10n.tarGzBuildGroupSubtitle,
-      status: _tarGzBuildStatus,
-      installTarget: ToolchainInstallTarget.tarGz,
-      installProgress: _installProgressFor(ToolchainInstallTarget.tarGz),
-      dependencyNote: _commonToolsDependencyNote(l10n),
-      tools: [
-        _linuxToolchainTool(l10n),
-        ToolStatus(
-          name: 'tar',
-          command: 'tar',
-          status: _tarToolStatus,
-          note: l10n.tarToolNote,
-        ),
-      ],
-    );
-  }
-
   ToolchainGroup _windowsBuildGroup(AppLocalizations l10n) {
     return ToolchainGroup(
       title: l10n.windowsBuildGroupTitle,
       subtitle: l10n.windowsBuildGroupSubtitle,
-      status: _zipToolStatus == ToolAvailability.installed
-          ? ToolAvailability.installed
-          : ToolAvailability.available,
-      installTarget: ToolchainInstallTarget.exe,
-      installProgress: _installProgressFor(ToolchainInstallTarget.exe),
-      guideSteps: l10n.windowsBuildKitGuideSteps,
+      status: _windowsToolsStatus,
+      installTarget: ToolchainInstallTarget.windows,
+      installProgress: _installProgressFor(ToolchainInstallTarget.windows),
+      dependencyNote: _commonToolsDependencyNote(l10n),
+      installSizeLabel: _visualStudioStatus == ToolAvailability.installed
+          ? null
+          : '~7 GB',
       tools: [
         ToolStatus(
-          name: 'zip',
-          command: 'zip',
-          status: _zipToolStatus,
-          note: l10n.windowsZipNote,
+          name: 'Visual Studio C++',
+          command: 'Desktop development with C++',
+          status: _visualStudioStatus,
+          note: l10n.visualStudioNote,
         ),
         ToolStatus(
-          name: 'Windows 10/11',
-          command: 'real machine or VM',
-          status: ToolAvailability.available,
-          note: l10n.windowsMachineNote,
-          showCommand: false,
+          name: 'Inno Setup 6',
+          command: 'ISCC.exe',
+          status: _innoSetupStatus,
+          note: l10n.innoSetupNote,
         ),
         ToolStatus(
-          name: 'Windows build script',
-          command: 'build_windows.cmd',
+          name: l10n.developerModeName,
+          command: 'ms-settings:developers',
+          status: _developerModeStatus,
+          note: l10n.developerModeNote,
+        ),
+        ToolStatus(
+          name: l10n.buildScriptToolName,
+          command: WindowsInstallerFiles.scriptFileName,
           status: ToolAvailability.installed,
-          note: l10n.windowsBuildScriptNote,
+          note: l10n.buildScriptToolNote,
         ),
       ],
     );
@@ -756,13 +453,13 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       tools: [
         ToolStatus(
           name: 'Android SDK',
-          command: r'ANDROID_HOME / sdkmanager',
+          command: r'ANDROID_HOME / sdkmanager.bat',
           status: _androidSdkStatus,
           note: l10n.androidSdkNote,
         ),
         ToolStatus(
           name: 'Java',
-          command: 'java',
+          command: 'java.exe',
           status: _javaStatus,
           note: l10n.javaNote,
         ),
@@ -770,97 +467,27 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
     );
   }
 
-  ToolStatus _hostSystemTool(
-    AppLocalizations l10n,
-    _HostDistribution distribution,
-  ) {
-    return ToolStatus(
-      name: l10n.hostSystemToolName,
-      command: distribution.id,
-      status: distribution.family == _LinuxDistributionFamily.unknown
-          ? ToolAvailability.missing
-          : ToolAvailability.installed,
-      note: l10n.hostSystemToolNote,
-    );
-  }
-
-  ToolStatus _flutterTool(AppLocalizations l10n) {
-    return ToolStatus(
-      name: 'Flutter SDK',
-      command: 'flutter',
-      status: _flutterStatus,
-      note: l10n.flutterSdkNote,
-    );
-  }
-
-  ToolStatus _linuxToolchainTool(AppLocalizations l10n) {
-    return ToolStatus(
-      name: 'Linux toolchain',
-      command: 'clang, cmake, ninja, GTK',
-      status: _linuxToolchainStatus,
-      note: l10n.hostLinuxToolchainNote,
-    );
-  }
-
-  ToolAvailability get _nativeDebBuildStatus {
-    if (_linuxToolchainStatus == ToolAvailability.installed &&
-        _debToolStatus == ToolAvailability.installed) {
-      return ToolAvailability.installed;
-    }
-    return ToolAvailability.available;
-  }
-
-  ToolAvailability get _dockerDebBuildStatus {
-    if (_containerRuntimeStatus == ToolAvailability.installed &&
-        _debBuilderStatus == ToolAvailability.installed) {
-      return ToolAvailability.installed;
-    }
-    return ToolAvailability.available;
-  }
-
-  ToolAvailability get _nativeRpmBuildStatus {
-    if (_linuxToolchainStatus == ToolAvailability.installed &&
-        _rpmToolStatus == ToolAvailability.installed) {
-      return ToolAvailability.installed;
-    }
-    return ToolAvailability.available;
-  }
-
-  ToolAvailability get _dockerRpmBuildStatus {
-    // The Fedora builder can already be installed and managed, but RPM builds
-    // are still wired through the host packager until container RPM export lands.
-    return ToolAvailability.available;
-  }
-
-  ToolAvailability get _pacmanBuildStatus {
-    if (_linuxToolchainStatus == ToolAvailability.installed &&
-        _makepkgStatus == ToolAvailability.installed &&
-        _fakerootStatus == ToolAvailability.installed) {
-      return ToolAvailability.installed;
-    }
-    return ToolAvailability.available;
-  }
-
-  ToolAvailability get _appImageBuildStatus {
-    if (_linuxToolchainStatus == ToolAvailability.installed &&
-        _appImageToolStatus == ToolAvailability.installed) {
-      return ToolAvailability.installed;
-    }
-    return ToolAvailability.available;
-  }
-
-  ToolAvailability get _tarGzBuildStatus {
-    if (_linuxToolchainStatus == ToolAvailability.installed &&
-        _tarToolStatus == ToolAvailability.installed) {
-      return ToolAvailability.installed;
-    }
-    return ToolAvailability.available;
-  }
-
   ToolAvailability get _commonToolsStatus {
     if (_flutterStatus == ToolAvailability.installed &&
-        _gitStatus == ToolAvailability.installed &&
-        _archiveToolsStatus == ToolAvailability.installed) {
+        _gitStatus == ToolAvailability.installed) {
+      return ToolAvailability.installed;
+    }
+    return ToolAvailability.available;
+  }
+
+  ToolAvailability get _windowsToolsStatus {
+    if (_visualStudioStatus == ToolAvailability.installed &&
+        _innoSetupStatus == ToolAvailability.installed) {
+      return ToolAvailability.installed;
+    }
+    return ToolAvailability.available;
+  }
+
+  /// setup.exe is buildable here only with the Flutter SDK, Visual Studio and
+  /// Inno Setup together.
+  ToolAvailability get _windowsBuildStatus {
+    if (_flutterStatus == ToolAvailability.installed &&
+        _windowsToolsStatus == ToolAvailability.installed) {
       return ToolAvailability.installed;
     }
     return ToolAvailability.available;
@@ -881,122 +508,6 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       return ToolAvailability.installed;
     }
     return ToolAvailability.available;
-  }
-
-  _HostDistribution get _hostDistribution {
-    if (!Platform.isLinux) {
-      return _HostDistribution(
-        id: Platform.operatingSystem,
-        name: _hostSystemLabel(),
-        family: _LinuxDistributionFamily.unknown,
-      );
-    }
-
-    final values = _readOsRelease();
-    final id = values['ID']?.toLowerCase() ?? 'linux';
-    final idLike = values['ID_LIKE']?.toLowerCase() ?? '';
-    final name = values['NAME'] ?? _hostSystemLabel();
-    final family = _detectDistributionFamily(id, idLike);
-    return _HostDistribution(id: id, name: name, family: family);
-  }
-
-  _LinuxDistributionFamily _detectDistributionFamily(String id, String idLike) {
-    final rpmIds = {'fedora', 'rhel', 'centos', 'rocky', 'almalinux'};
-    final unsupportedRpmIds = {
-      'opensuse',
-      'opensuse-leap',
-      'opensuse-tumbleweed',
-      'sles',
-      'alt',
-      'altlinux',
-    };
-    final debIds = {
-      'debian',
-      'ubuntu',
-      'linuxmint',
-      'pop',
-      'elementary',
-      'zorin',
-    };
-    final archIds = {
-      'arch',
-      'archarm',
-      'manjaro',
-      'endeavouros',
-      'garuda',
-      'cachyos',
-      'artix',
-    };
-    final tokens = {
-      id,
-      ...idLike.split(RegExp(r'\s+')).where((part) => part.isNotEmpty),
-    };
-
-    if (tokens.any(unsupportedRpmIds.contains)) {
-      return _LinuxDistributionFamily.unsupportedRpm;
-    }
-    if (tokens.any(debIds.contains)) {
-      return _LinuxDistributionFamily.deb;
-    }
-    if (tokens.any(rpmIds.contains)) {
-      return _LinuxDistributionFamily.rpm;
-    }
-    if (tokens.any(archIds.contains)) {
-      return _LinuxDistributionFamily.arch;
-    }
-    return _LinuxDistributionFamily.unknown;
-  }
-
-  Map<String, String> _readOsRelease() {
-    final file = File('/etc/os-release');
-    if (!file.existsSync()) {
-      return const {};
-    }
-
-    final values = <String, String>{};
-    for (final line in file.readAsLinesSync()) {
-      final separator = line.indexOf('=');
-      if (separator <= 0) {
-        continue;
-      }
-      final key = line.substring(0, separator);
-      var value = line.substring(separator + 1).trim();
-      if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
-        value = value.substring(1, value.length - 1);
-      }
-      values[key] = value;
-    }
-    return values;
-  }
-
-  String _hostSystemLabel() {
-    final system = switch (Platform.operatingSystem) {
-      'linux' => 'Linux',
-      'windows' => 'Windows',
-      'macos' => 'macOS',
-      'android' => 'Android',
-      'ios' => 'iOS',
-      final value => value,
-    };
-    final architecture = _hostArchitecture();
-    return architecture.isEmpty ? system : '$system $architecture';
-  }
-
-  String _hostArchitecture() {
-    if (!Platform.isLinux && !Platform.isMacOS) {
-      return '';
-    }
-
-    try {
-      final result = Process.runSync('uname', ['-m']);
-      final architecture = result.stdout.toString().trim();
-      if (architecture.isNotEmpty) {
-        return architecture;
-      }
-    } on Object {
-      // The UI can still show the OS if architecture probing is unavailable.
-    }
-    return '';
   }
 
   Future<void> _installTools(ToolchainInstallTarget target) async {
@@ -1039,171 +550,68 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       ),
     );
 
-    if (result.success && widget.enableToolchainDiagnostics) {
+    if (widget.enableToolchainDiagnostics) {
       await _refreshToolchainStatus();
     }
   }
 
   Future<void> _cancelToolInstall() async {
     _toolInstallCancelRequested = true;
-    await Future.wait([
-      _toolchainService.cancelActiveInstall(),
-      _builderService.cancelActiveInstall(),
-    ]);
-  }
-
-  Future<void> _removeTools(ToolchainInstallTarget target) async {
-    if (_installingToolTarget != null) {
-      return;
-    }
-
-    setState(() {
-      _installingToolTarget = target;
-      _installProgress = null;
-    });
-
-    final l10n = context.l10n;
-    final result = await _runToolRemove(target);
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _installingToolTarget = null;
-      _installProgress = null;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          result.success
-              ? l10n.toolRemoveSuccess(result.message)
-              : l10n.toolRemoveFailed(result.message),
-        ),
-      ),
-    );
-
-    if (result.success && widget.enableToolchainDiagnostics) {
-      await _refreshToolchainStatus();
-    }
-  }
-
-  Future<ToolInstallResult> _runToolRemove(
-    ToolchainInstallTarget target,
-  ) async {
-    return switch (target) {
-      ToolchainInstallTarget.common => const ToolInstallResult.failure(
-        'Common tools removal is not implemented yet.',
-      ),
-      ToolchainInstallTarget.rpm => _builderService.removeBuilder(
-        BuilderEnvironment.rpmFedora,
-      ),
-      ToolchainInstallTarget.deb => _builderService.removeBuilder(
-        BuilderEnvironment.debBookworm,
-      ),
-      ToolchainInstallTarget.pacman => const ToolInstallResult.failure(
-        'pacman tool removal is not implemented yet.',
-      ),
-      ToolchainInstallTarget.appImage => const ToolInstallResult.failure(
-        'AppImageTool removal is not implemented yet.',
-      ),
-      ToolchainInstallTarget.tarGz => const ToolInstallResult.failure(
-        'tar.gz tool removal is not implemented yet.',
-      ),
-      ToolchainInstallTarget.exe => ToolInstallResult.failure(
-        context.l10n.exeInstallUnsupported,
-      ),
-      ToolchainInstallTarget.android => const ToolInstallResult.failure(
-        'Android SDK removal is not implemented yet.',
-      ),
-    };
+    await _toolchainService.cancelActiveInstall();
   }
 
   Future<ToolInstallResult> _runToolInstall(
     ToolchainInstallTarget target,
   ) async {
     final l10n = context.l10n;
-    final distribution = _hostDistribution;
-    if (target == ToolchainInstallTarget.rpm &&
-        distribution.family == _LinuxDistributionFamily.unsupportedRpm) {
-      return ToolInstallResult.failure(l10n.rpmHostInstallUnsupported);
-    }
-    if (target == ToolchainInstallTarget.pacman &&
-        distribution.family != _LinuxDistributionFamily.arch) {
-      return ToolInstallResult.failure(l10n.pacmanHostInstallUnsupported);
-    }
-
+    final needsCommon = [
+      if (_gitStatus != ToolAvailability.installed)
+        _wingetStep(l10n.installStepGit, 'Git.Git', weight: 2),
+      if (_flutterStatus != ToolAvailability.installed) _flutterStep(l10n),
+    ];
     final steps = switch (target) {
-      ToolchainInstallTarget.common => [
-        if (_gitStatus != ToolAvailability.installed ||
-            _archiveToolsStatus != ToolAvailability.installed)
-          _systemPackagesStep(l10n, _commonPackages),
-        if (_flutterStatus != ToolAvailability.installed) _flutterStep(l10n),
-      ],
-      ToolchainInstallTarget.rpm =>
-        distribution.family == _LinuxDistributionFamily.rpm
-            ? _hostBuildSteps(
-                l10n,
-                systemToolsReady:
-                    _linuxToolchainStatus == ToolAvailability.installed &&
-                    _rpmToolStatus == ToolAvailability.installed,
-                packagesByManager: _rpmHostPackages,
-              )
-            : _builderSteps(l10n, BuilderEnvironment.rpmFedora),
-      ToolchainInstallTarget.deb =>
-        distribution.family == _LinuxDistributionFamily.deb
-            ? _hostBuildSteps(
-                l10n,
-                systemToolsReady:
-                    _linuxToolchainStatus == ToolAvailability.installed &&
-                    _debToolStatus == ToolAvailability.installed,
-                packagesByManager: _debHostPackages,
-              )
-            : _builderSteps(l10n, BuilderEnvironment.debBookworm),
-      ToolchainInstallTarget.pacman =>
-        distribution.family == _LinuxDistributionFamily.arch
-            ? _hostBuildSteps(
-                l10n,
-                systemToolsReady:
-                    _linuxToolchainStatus == ToolAvailability.installed &&
-                    _makepkgStatus == ToolAvailability.installed &&
-                    _fakerootStatus == ToolAvailability.installed,
-                packagesByManager: _pacmanHostPackages,
-              )
-            : const <_ToolInstallStep>[],
-      ToolchainInstallTarget.appImage => [
-        ..._hostBuildSteps(
-          l10n,
-          systemToolsReady: _linuxToolchainStatus == ToolAvailability.installed,
-          packagesByManager: _appImageHostPackages,
-        ),
-        if (_appImageToolStatus != ToolAvailability.installed)
-          _appImageToolStep(l10n),
-      ],
-      ToolchainInstallTarget.tarGz => _hostBuildSteps(
-        l10n,
-        systemToolsReady:
-            _linuxToolchainStatus == ToolAvailability.installed &&
-            _tarToolStatus == ToolAvailability.installed,
-        packagesByManager: _tarGzHostPackages,
-      ),
-      ToolchainInstallTarget.exe => [
-        if (_zipToolStatus != ToolAvailability.installed)
-          _systemPackagesStep(l10n, _windowsKitPackages),
+      ToolchainInstallTarget.common => needsCommon,
+      ToolchainInstallTarget.windows => [
+        ...needsCommon,
+        if (_visualStudioStatus != ToolAvailability.installed)
+          _wingetStep(
+            l10n.installStepVisualStudio,
+            'Microsoft.VisualStudio.2022.BuildTools',
+            weight: 10,
+            extraArguments: const [
+              '--override',
+              '--wait --passive --add Microsoft.VisualStudio.Workload.VCTools '
+                  '--includeRecommended',
+            ],
+          ),
+        if (_innoSetupStatus != ToolAvailability.installed)
+          _wingetStep(
+            l10n.installStepInnoSetup,
+            'JRSoftware.InnoSetup',
+            weight: 1,
+          ),
+        if (_developerModeStatus != ToolAvailability.installed)
+          _ToolInstallStep(
+            title: l10n.installStepDeveloperMode,
+            weight: 1,
+            run: (report) async {
+              await _toolchainService.openDeveloperSettings();
+              return ToolInstallResult.success(l10n.developerModeOpened);
+            },
+          ),
       ],
       ToolchainInstallTarget.android => [
-        ..._hostBuildSteps(
-          l10n,
-          systemToolsReady: await _toolchainService.allCommandsAvailable([
-            const CommandCheck('git', ['--version']),
-            const CommandCheck('unzip', ['-v']),
-            const CommandCheck('java', ['-version']),
-          ]),
-          packagesByManager: _androidHostPackages,
-        ),
+        ...needsCommon,
+        if (_javaStatus != ToolAvailability.installed)
+          _wingetStep(l10n.installStepJava, 'Microsoft.OpenJDK.17', weight: 2),
         if (_androidSdkStatus != ToolAvailability.installed)
-          _androidSdkStep(l10n),
+          _ToolInstallStep(
+            title: l10n.installStepAndroidSdk,
+            weight: 6,
+            run: (report) => _toolchainService.installAndroidSdk(
+              onProgress: (fraction, detail) => report(fraction, detail),
+            ),
+          ),
       ],
     };
 
@@ -1259,60 +667,19 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
     return ToolInstallResult.success(messages.join('\n'));
   }
 
-  /// Steps for targets built on the host: their system packages and the
-  /// common Flutter SDK, so a single click is enough even on a clean machine.
-  List<_ToolInstallStep> _hostBuildSteps(
-    AppLocalizations l10n, {
-    required bool systemToolsReady,
-    required Map<String, List<String>> packagesByManager,
+  _ToolInstallStep _wingetStep(
+    String title,
+    String packageId, {
+    required int weight,
+    List<String> extraArguments = const [],
   }) {
-    final needsFlutter = _flutterStatus != ToolAvailability.installed;
-    final needsCommonPackages =
-        needsFlutter &&
-        (_gitStatus != ToolAvailability.installed ||
-            _archiveToolsStatus != ToolAvailability.installed);
-    return [
-      if (!systemToolsReady || needsCommonPackages)
-        _systemPackagesStep(
-          l10n,
-          needsCommonPackages
-              ? _mergePackages(_commonPackages, packagesByManager)
-              : packagesByManager,
-        ),
-      if (needsFlutter) _flutterStep(l10n),
-    ];
-  }
-
-  List<_ToolInstallStep> _builderSteps(
-    AppLocalizations l10n,
-    BuilderEnvironment builder,
-  ) {
-    return [
-      if (_containerRuntimeStatus != ToolAvailability.installed)
-        _ToolInstallStep(
-          title: l10n.installStepContainerRuntime,
-          weight: 3,
-          cancellable: false,
-          run: _installDockerTools,
-        ),
-      _ToolInstallStep(
-        title: l10n.installStepBuilderImage,
-        weight: 8,
-        run: (report) => _installBuilderImage(builder, report),
-      ),
-    ];
-  }
-
-  _ToolInstallStep _systemPackagesStep(
-    AppLocalizations l10n,
-    Map<String, List<String>> packagesByManager,
-  ) {
     return _ToolInstallStep(
-      title: l10n.installStepSystemPackages,
-      weight: 3,
+      title: title,
+      weight: weight,
       cancellable: false,
-      run: (report) => _toolchainService.installSystemPackages(
-        packagesByManager: packagesByManager,
+      run: (report) => _toolchainService.installWithWinget(
+        packageId,
+        extraArguments: extraArguments,
         onProgress: (fraction, detail) => report(fraction, detail),
       ),
     );
@@ -1328,92 +695,18 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
     );
   }
 
-  _ToolInstallStep _androidSdkStep(AppLocalizations l10n) {
-    return _ToolInstallStep(
-      title: l10n.installStepAndroidSdk,
-      weight: 6,
-      run: (report) => _toolchainService.installAndroidSdk(
-        onProgress: (fraction, detail) => report(fraction, detail),
-      ),
-    );
-  }
-
-  _ToolInstallStep _appImageToolStep(AppLocalizations l10n) {
-    return _ToolInstallStep(
-      title: l10n.installStepAppImageTool,
-      weight: 1,
-      run: (report) => _toolchainService.installAppImageTool(
-        onProgress: (fraction, detail) => report(fraction, detail),
-      ),
-    );
-  }
-
-  Future<ToolInstallResult> _installBuilderImage(
-    BuilderEnvironment builder,
-    _InstallStepReport report,
-  ) async {
-    ToolInstallResult? result;
-    await for (final event in _builderService.installBuilder(builder)) {
-      final eventResult = event.result;
-      if (eventResult != null) {
-        result = eventResult;
-        continue;
-      }
-      final progress = event.progress;
-      report(
-        progress == null ? null : progress / 100,
-        event.detail ?? '',
-        remainingSeconds: event.remainingSeconds,
-      );
-    }
-
-    return result ??
-        const ToolInstallResult.failure('Builder installation did not finish.');
-  }
-
-  Future<ToolInstallResult> _installDockerTools(
-    _InstallStepReport report,
-  ) async {
-    final installResult = await _toolchainService.installSystemPackages(
-      packagesByManager: const {
-        'dnf': ['moby-engine', 'docker-cli', 'containerd'],
-        'apt-get': ['docker.io'],
-        'zypper': ['docker'],
-        'pacman': ['docker'],
-      },
-      onProgress: (fraction, detail) => report(fraction, detail),
-    );
-    if (!installResult.success) {
-      return installResult;
-    }
-
-    report(null, 'Enabling Docker service.');
-    final serviceResult = await _toolchainService.enableDockerService();
-    if (!serviceResult.success) {
-      return serviceResult;
-    }
-
-    report(null, 'Adding current user to docker group.');
-    final groupResult = await _toolchainService.addCurrentUserToDockerGroup();
-    if (!groupResult.success) {
-      return groupResult;
-    }
-
-    return ToolInstallResult.success(
-      [
-        installResult.message,
-        serviceResult.message,
-        groupResult.message,
-      ].join('\n'),
-    );
-  }
-
   @override
   void dispose() {
     _workspaceTabController.removeListener(_handleWorkspaceTabChanged);
     _workspaceTabController.dispose();
-    _runningProjectProcess?.kill(ProcessSignal.sigterm);
-    _sendToDeviceProcess?.kill(ProcessSignal.sigterm);
+    final runningProject = _runningProjectProcess;
+    if (runningProject != null) {
+      unawaited(killProcessTree(runningProject));
+    }
+    final sendProcess = _sendToDeviceProcess;
+    if (sendProcess != null) {
+      unawaited(killProcessTree(sendProcess));
+    }
     if (_metadataListenersAttached) {
       for (final controller in _metadataControllers) {
         controller.removeListener(_scheduleReleaseMetadataSave);
@@ -1433,11 +726,6 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
     _descriptionController.dispose();
     _widthController.dispose();
     _heightController.dispose();
-    _debAdditionalDependenciesController.dispose();
-    _rpmAdditionalDependenciesController.dispose();
-    _pacmanAdditionalDependenciesController.dispose();
-    _packageMetadataController.dispose();
-    _packageDependenciesController.dispose();
     super.dispose();
   }
 
@@ -1479,7 +767,6 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       windowWidth: int.tryParse(_widthController.text),
       windowHeight: int.tryParse(_heightController.text),
       targets: _targets,
-      additionalDependencies: _additionalPackageDependencies(),
     );
 
     var hadWarning = false;
@@ -1581,7 +868,7 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
         ..add(
           const BuildLogEntry(
             title: 'Running Flutter app',
-            detail: 'flutter run -d linux',
+            detail: 'flutter run -d windows',
             state: BuildLogState.running,
           ),
         );
@@ -1612,11 +899,11 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
   }
 
   Future<Process> _startFlutterRun(String projectPath) {
-    return _startFlutter(projectPath, const ['run', '-d', 'linux']);
+    return _startFlutter(projectPath, const ['run', '-d', 'windows']);
   }
 
-  /// Starts the resolved flutter executable without a shell, so a missing
-  /// SDK is reported instead of ending as "flutter: command not found".
+  /// Starts the resolved `flutter.bat`, so a missing SDK is reported instead
+  /// of ending as "flutter is not recognized as a command".
   Future<Process> _startFlutter(String projectPath, List<String> arguments) {
     final locator = FlutterLocator();
     final flutter = locator.find();
@@ -1631,30 +918,35 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       flutter.path,
       arguments,
       workingDirectory: projectPath,
-      environment: {...?_runEnvironment(), ...locator.environmentFor(flutter)},
+      environment: {
+        ...?BuildService.androidBuildEnvironment(WindowsTools()),
+        ...locator.environmentFor(flutter),
+      },
+      runInShell: true,
     );
   }
 
   void _listenToRunOutput(Stream<List<int>> stream, BuildLogState state) {
-    stream.transform(utf8.decoder).transform(const LineSplitter()).listen((
-      line,
-    ) {
-      final trimmed = line.trim();
-      if (!mounted || trimmed.isEmpty) {
-        return;
-      }
-      setState(() {
-        _buildLog.add(
-          BuildLogEntry(
-            title: state == BuildLogState.warning
-                ? 'Flutter stderr'
-                : 'Flutter output',
-            detail: trimmed,
-            state: state,
-          ),
-        );
-      });
-    });
+    stream
+        .transform(const Utf8Decoder(allowMalformed: true))
+        .transform(const LineSplitter())
+        .listen((line) {
+          final trimmed = line.trim();
+          if (!mounted || trimmed.isEmpty) {
+            return;
+          }
+          setState(() {
+            _buildLog.add(
+              BuildLogEntry(
+                title: state == BuildLogState.warning
+                    ? 'Flutter stderr'
+                    : 'Flutter output',
+                detail: trimmed,
+                state: state,
+              ),
+            );
+          });
+        });
   }
 
   Future<void> _waitForRunProcess(Process process) async {
@@ -1680,14 +972,14 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
     if (process == null) {
       return;
     }
-    process.kill(ProcessSignal.sigterm);
+    unawaited(killProcessTree(process));
     setState(() {
       _isRunningProject = false;
       _runningProjectProcess = null;
       _buildLog.add(
         const BuildLogEntry(
           title: 'Stopping Flutter app',
-          detail: 'Sent SIGTERM to the running flutter process.',
+          detail: 'Stopped the flutter process and the app it started.',
           state: BuildLogState.running,
         ),
       );
@@ -1754,7 +1046,7 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
         return;
       }
 
-      final apk = _findReleaseApk(projectPath);
+      final apk = BuildService.findReleaseApk(projectPath);
       if (apk == null) {
         _finishSendToDevice(context.l10n.androidApkMissing, failed: true);
         return;
@@ -2060,30 +1352,6 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
     return process.exitCode;
   }
 
-  File? _findReleaseApk(String projectPath) {
-    final standardApk = File(
-      _joinPath(projectPath, 'build/app/outputs/flutter-apk/app-release.apk'),
-    );
-    if (standardApk.existsSync()) {
-      return standardApk;
-    }
-
-    final outputDirectory = Directory(
-      _joinPath(projectPath, 'build/app/outputs'),
-    );
-    if (!outputDirectory.existsSync()) {
-      return null;
-    }
-    for (final entity in outputDirectory.listSync(recursive: true)) {
-      if (entity is File &&
-          entity.path.endsWith('.apk') &&
-          entity.path.contains('release')) {
-        return entity;
-      }
-    }
-    return null;
-  }
-
   void _logAdbResult(String title, AdbResult result) {
     if (!mounted) {
       return;
@@ -2126,7 +1394,10 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
     // An adb step cannot be interrupted mid-flight, so the flag is what stops
     // the flow: its result is dropped instead of being reported as a failure.
     _sendToDeviceCancelled = true;
-    _sendToDeviceProcess?.kill(ProcessSignal.sigterm);
+    final sendProcess = _sendToDeviceProcess;
+    if (sendProcess != null) {
+      unawaited(killProcessTree(sendProcess));
+    }
     _sendToDeviceProcess = null;
     setState(() {
       _isSendingToDevice = false;
@@ -2139,42 +1410,6 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
         ),
       );
     });
-  }
-
-  Map<String, String>? _runEnvironment() {
-    final sdkRoot =
-        Platform.environment['ANDROID_HOME'] ??
-        Platform.environment['ANDROID_SDK_ROOT'];
-    if (sdkRoot != null && sdkRoot.isNotEmpty) {
-      return null;
-    }
-    final managedSdk = _managedAndroidSdkDirectory();
-    if (!managedSdk.existsSync()) {
-      return null;
-    }
-    return {
-      ...Platform.environment,
-      'ANDROID_HOME': managedSdk.path,
-      'ANDROID_SDK_ROOT': managedSdk.path,
-    };
-  }
-
-  Directory _managedAndroidSdkDirectory() {
-    return Directory(
-      _joinPath(_userDataDirectory().path, 'pack_foundry/android-sdk'),
-    );
-  }
-
-  Directory _userDataDirectory() {
-    final xdgDataHome = Platform.environment['XDG_DATA_HOME'];
-    if (xdgDataHome != null && xdgDataHome.isNotEmpty) {
-      return Directory(xdgDataHome);
-    }
-    final home = Platform.environment['HOME'];
-    if (home != null && home.isNotEmpty) {
-      return Directory(_joinPath(home, '.local/share'));
-    }
-    return Directory.systemTemp;
   }
 
   void _replaceRoadmapWithPreview() {
@@ -2240,18 +1475,31 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
     _setProjectPath(path);
   }
 
+  /// Expands `%VARIABLE%` references and a leading `~`, and drops the quotes
+  /// Explorer's "Copy as path" adds.
   String? _expandHomeDirectory(String path) {
-    if (path.isEmpty) {
+    var value = path.trim();
+    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+      value = value.substring(1, value.length - 1).trim();
+    }
+    if (value.isEmpty) {
       return null;
     }
-    final home = Platform.environment['HOME'];
-    if (home == null || home.isEmpty || !path.startsWith('~')) {
-      return path;
+    final tools = WindowsTools();
+    value = value.replaceAllMapped(
+      RegExp(r'%([^%]+)%'),
+      (match) => tools.variable(match.group(1)!) ?? match.group(0)!,
+    );
+    final home = tools.variable('USERPROFILE');
+    if (home == null || home.isEmpty || !value.startsWith('~')) {
+      return value;
     }
-    if (path == '~') {
+    if (value == '~') {
       return home;
     }
-    return path.startsWith('~/') ? _joinPath(home, path.substring(2)) : path;
+    return value.startsWith(r'~\') || value.startsWith('~/')
+        ? _joinPath(home, value.substring(2))
+        : value;
   }
 
   void _setProjectPath(String path) {
@@ -2280,7 +1528,7 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       if (!_isBuilding) {
         _replaceRoadmapWithPreview();
       }
-      _hasDesktopRunner = _hasLinuxRunner(path);
+      _hasDesktopRunner = _hasWindowsRunner(path);
       if (_projectPathController.text != path) {
         _projectPathController.text = path;
       }
@@ -2486,16 +1734,7 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
               target.artifact,
             ),
       ],
-      additionalDependencies: _additionalPackageDependencies(),
     );
-  }
-
-  Map<String, String> _additionalPackageDependencies() {
-    return {
-      'deb': _debAdditionalDependenciesController.text,
-      'rpm': _rpmAdditionalDependenciesController.text,
-      'pacman': _pacmanAdditionalDependenciesController.text,
-    }..removeWhere((key, value) => value.trim().isEmpty);
   }
 
   void _applyProjectConfig(ProjectConfig config) {
@@ -2512,18 +1751,6 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       _restoreConfigText(_homepageUrlController, config.homepageUrl);
       _restoreConfigText(_licenseController, config.license);
       _restoreConfigText(_descriptionController, config.description);
-      _restoreConfigText(
-        _debAdditionalDependenciesController,
-        config.additionalDependencies['deb'],
-      );
-      _restoreConfigText(
-        _rpmAdditionalDependenciesController,
-        config.additionalDependencies['rpm'],
-      );
-      _restoreConfigText(
-        _pacmanAdditionalDependenciesController,
-        config.additionalDependencies['pacman'],
-      );
       if (config.windowWidth != null) {
         _widthController.text = config.windowWidth.toString();
       }
@@ -2674,12 +1901,10 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
     return value;
   }
 
-  /// The run action launches `flutter run -d linux`, so only the Linux runner
-  /// makes a project runnable from this host.
-  bool _hasLinuxRunner(String projectPath) {
-    return File(
-      _joinPath(projectPath, 'linux/runner/my_application.cc'),
-    ).existsSync();
+  /// The run action launches `flutter run -d windows`, so only the Windows
+  /// runner makes a project runnable from this host.
+  bool _hasWindowsRunner(String projectPath) {
+    return File(_joinPath(projectPath, 'windows/runner/main.cpp')).existsSync();
   }
 
   List<ProjectCheck> _buildProjectChecks(
@@ -2691,10 +1916,7 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
     final hasPubspec = File(
       _joinPath(projectPath, 'pubspec.yaml'),
     ).existsSync();
-    final hasLinuxRunner = _hasLinuxRunner(projectPath);
-    final hasWindowsRunner = File(
-      _joinPath(projectPath, 'windows/runner/main.cpp'),
-    ).existsSync();
+    final hasWindowsRunner = _hasWindowsRunner(projectPath);
     final hasVersion = metadata.version != null && metadata.version!.isNotEmpty;
     final hasDescription =
         metadata.description != null && metadata.description!.isNotEmpty;
@@ -2704,8 +1926,6 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
         label: hasPubspec ? l10n.pubspecFound : l10n.pubspecMissing,
         tone: hasPubspec ? ChipTone.good : ChipTone.warning,
       ),
-      if (hasLinuxRunner)
-        ProjectCheck(label: l10n.linuxRunnerFound, tone: ChipTone.good),
       if (hasWindowsRunner)
         ProjectCheck(label: l10n.windowsRunnerFound, tone: ChipTone.good),
       ProjectCheck(
@@ -2732,27 +1952,13 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
   }
 
   _WindowSize? _readFlutterWindowSize(String projectPath) {
-    final size =
-        _readLinuxWindowSize(projectPath) ??
-        _readWindowsWindowSize(projectPath);
+    final size = _readWindowsWindowSize(projectPath);
     // `flutter create` always writes 1280x720, so that size says nothing about
     // what the developer wants; offer the PackFoundry default instead.
     if (size != null && size.isFlutterTemplate) {
       return _WindowSize.packFoundryDefault;
     }
     return size;
-  }
-
-  _WindowSize? _readLinuxWindowSize(String projectPath) {
-    final file = File(_joinPath(projectPath, 'linux/runner/my_application.cc'));
-    if (!file.existsSync()) {
-      return null;
-    }
-
-    final match = RegExp(
-      r'gtk_window_set_default_size\s*\([^,]+,\s*(\d+)\s*,\s*(\d+)\s*\)',
-    ).firstMatch(file.readAsStringSync());
-    return _windowSizeFromMatch(match);
   }
 
   _WindowSize? _readWindowsWindowSize(String projectPath) {
@@ -2824,7 +2030,7 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       acceptedTypeGroups: [
         XTypeGroup(
           label: context.l10n.iconTypeGroup,
-          extensions: ['png', 'svg'],
+          extensions: ['png', 'ico', 'svg'],
         ),
       ],
       confirmButtonText: context.l10n.chooseIcon,
@@ -2837,112 +2043,6 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       _iconPath = file.path;
       _iconAutoDetected = false;
     });
-  }
-
-  Future<void> _choosePackageFile() async {
-    final file = await openFile(
-      acceptedTypeGroups: [
-        XTypeGroup(
-          label: context.l10n.packageTypeGroup,
-          extensions: [
-            'deb',
-            'rpm',
-            'AppImage',
-            'appimage',
-            'tar.gz',
-            'tgz',
-            'gz',
-            'apk',
-            'exe',
-            'zip',
-          ],
-        ),
-      ],
-      confirmButtonText: context.l10n.choosePackage,
-    );
-    if (file == null || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _isInspectingPackage = true;
-    });
-
-    try {
-      final inspection = await _packageInspectorService.inspect(file.path);
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _packageInspection = inspection;
-        _packageMetadataController.text = _formatPackageFields(
-          inspection.fields,
-        );
-        _packageDependenciesController.text = inspection.dependencyText;
-      });
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      _showSnackBar(context.l10n.packageInspectFailed(error.toString()));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isInspectingPackage = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _saveEditedPackage() async {
-    final inspection = _packageInspection;
-    if (inspection == null || !inspection.saveSupported) {
-      return;
-    }
-
-    setState(() {
-      _isInspectingPackage = true;
-    });
-
-    try {
-      final outputPath = await _packageInspectorService.saveDebMetadata(
-        packagePath: inspection.path,
-        metadata: _packageMetadataController.text,
-        dependencies: _packageDependenciesController.text,
-      );
-      final refreshed = await _packageInspectorService.inspect(outputPath);
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _packageInspection = refreshed;
-        _packageMetadataController.text = _formatPackageFields(
-          refreshed.fields,
-        );
-        _packageDependenciesController.text = refreshed.dependencyText;
-      });
-      _showSnackBar(context.l10n.packageSaved(outputPath));
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      _showSnackBar(context.l10n.packageSaveFailed(error.toString()));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isInspectingPackage = false;
-        });
-      }
-    }
-  }
-
-  String _formatPackageFields(Map<String, String> fields) {
-    if (fields.isEmpty) {
-      return '';
-    }
-    return [
-      for (final entry in fields.entries) '${entry.key}: ${entry.value}',
-    ].join('\n');
   }
 
   void _replaceLog(BuildLogEntry entry) {
@@ -2974,11 +2074,6 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
         icon: Icons.rocket_launch_outlined,
         selectedIcon: Icons.rocket_launch,
       ),
-      _Workspace(
-        label: l10n.packageInspectorShort,
-        icon: Icons.inventory_2_outlined,
-        selectedIcon: Icons.inventory_2,
-      ),
     ];
 
     final content = _WorkspaceContent(
@@ -3004,14 +2099,6 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       descriptionController: _descriptionController,
       widthController: _widthController,
       heightController: _heightController,
-      debAdditionalDependenciesController: _debAdditionalDependenciesController,
-      rpmAdditionalDependenciesController: _rpmAdditionalDependenciesController,
-      pacmanAdditionalDependenciesController:
-          _pacmanAdditionalDependenciesController,
-      packageInspection: _packageInspection,
-      packageMetadataController: _packageMetadataController,
-      packageDependenciesController: _packageDependenciesController,
-      isInspectingPackage: _isInspectingPackage,
       targets: _targets,
       selectedTargets: selectedTargets,
       isBuilding: _isBuilding,
@@ -3019,7 +2106,9 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       canRunProject: _projectPath != null && _hasDesktopRunner,
       canSendToDevice:
           _projectPath != null &&
-          _targets.any((target) => target.artifact == 'APK' && target.selected),
+          _targets.any(
+            (target) => target.artifact == BuildTarget.apk && target.selected,
+          ),
       isSendingToDevice: _isSendingToDevice,
       sendToDeviceStatus: _sendToDeviceStatus,
       progress: _buildProgress,
@@ -3028,7 +2117,7 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       onThemeModeChanged: widget.onThemeModeChanged,
       onLocaleModeChanged: widget.onLocaleModeChanged,
       onInstallTools: _installTools,
-      onRemoveTools: _removeTools,
+      onRemoveTools: (_) {},
       onCancelInstall: _cancelToolInstall,
       onChooseProject: _chooseProjectFolder,
       onProjectPathSubmitted: _applyTypedProjectPath,
@@ -3040,9 +2129,7 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       onChooseOutput: _chooseOutputFolder,
       onChooseDefaultOutput: _chooseDefaultOutputFolder,
       onResetDefaultOutput: () => _setDefaultOutputPath(null),
-      onChoosePackage: _choosePackageFile,
       onTargetChanged: _setTargetSelection,
-      onSaveEditedPackage: _saveEditedPackage,
       onBuild: _runBuild,
       onRunProject: _runProjectWithoutBuild,
       onStopProject: _stopRunningProject,
@@ -3105,20 +2192,6 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
   }
 }
 
-class _HostDistribution {
-  const _HostDistribution({
-    required this.id,
-    required this.name,
-    required this.family,
-  });
-
-  final String id;
-  final String name;
-  final _LinuxDistributionFamily family;
-}
-
-enum _LinuxDistributionFamily { deb, rpm, arch, unsupportedRpm, unknown }
-
 class _ProjectMetadata {
   const _ProjectMetadata({
     this.name,
@@ -3168,13 +2241,6 @@ class _WorkspaceContent extends StatelessWidget {
     required this.descriptionController,
     required this.widthController,
     required this.heightController,
-    required this.debAdditionalDependenciesController,
-    required this.rpmAdditionalDependenciesController,
-    required this.pacmanAdditionalDependenciesController,
-    required this.packageInspection,
-    required this.packageMetadataController,
-    required this.packageDependenciesController,
-    required this.isInspectingPackage,
     required this.targets,
     required this.selectedTargets,
     required this.isBuilding,
@@ -3201,9 +2267,7 @@ class _WorkspaceContent extends StatelessWidget {
     required this.onChooseOutput,
     required this.onChooseDefaultOutput,
     required this.onResetDefaultOutput,
-    required this.onChoosePackage,
     required this.onTargetChanged,
-    required this.onSaveEditedPackage,
     required this.onBuild,
     required this.onRunProject,
     required this.onStopProject,
@@ -3233,13 +2297,6 @@ class _WorkspaceContent extends StatelessWidget {
   final TextEditingController descriptionController;
   final TextEditingController widthController;
   final TextEditingController heightController;
-  final TextEditingController debAdditionalDependenciesController;
-  final TextEditingController rpmAdditionalDependenciesController;
-  final TextEditingController pacmanAdditionalDependenciesController;
-  final PackageInspection? packageInspection;
-  final TextEditingController packageMetadataController;
-  final TextEditingController packageDependenciesController;
-  final bool isInspectingPackage;
   final List<BuildTarget> targets;
   final int selectedTargets;
   final bool isBuilding;
@@ -3266,9 +2323,7 @@ class _WorkspaceContent extends StatelessWidget {
   final VoidCallback onChooseOutput;
   final VoidCallback onChooseDefaultOutput;
   final VoidCallback onResetDefaultOutput;
-  final VoidCallback onChoosePackage;
   final void Function(BuildTarget target, bool selected) onTargetChanged;
-  final VoidCallback onSaveEditedPackage;
   final VoidCallback onBuild;
   final VoidCallback onRunProject;
   final VoidCallback onStopProject;
@@ -3345,14 +2400,8 @@ class _WorkspaceContent extends StatelessWidget {
           onChooseOutput: onChooseOutput,
           onChanged: onTargetChanged,
         ),
-        const SizedBox(height: 16),
-        PackageDependenciesPanel(
-          debController: debAdditionalDependenciesController,
-          rpmController: rpmAdditionalDependenciesController,
-          pacmanController: pacmanAdditionalDependenciesController,
-        ),
       ],
-      2 => [
+      _ => [
         BuildPanel(
           selectedTargets: selectedTargets,
           isBuilding: isBuilding,
@@ -3377,25 +2426,10 @@ class _WorkspaceContent extends StatelessWidget {
                   windowWidth: int.tryParse(widthController.text),
                   windowHeight: int.tryParse(heightController.text),
                   targets: targets,
-                  additionalDependencies: {
-                    'deb': debAdditionalDependenciesController.text,
-                    'rpm': rpmAdditionalDependenciesController.text,
-                    'pacman': pacmanAdditionalDependenciesController.text,
-                  }..removeWhere((key, value) => value.trim().isEmpty),
                 ),
           onBuild: onBuild,
           onRun: onRunProject,
           onStop: onStopProject,
-        ),
-      ],
-      _ => [
-        PackageInspectorPanel(
-          inspection: packageInspection,
-          metadataController: packageMetadataController,
-          dependenciesController: packageDependenciesController,
-          isBusy: isInspectingPackage,
-          onChoosePackage: onChoosePackage,
-          onSaveEditedPackage: onSaveEditedPackage,
         ),
       ],
     };
@@ -3525,75 +2559,3 @@ class _ToolInstallSession {
     return (elapsed * (1 - _overall) / _overall).round();
   }
 }
-
-Map<String, List<String>> _mergePackages(
-  Map<String, List<String>> first,
-  Map<String, List<String>> second,
-) {
-  return {
-    for (final manager in {...first.keys, ...second.keys})
-      manager: {...?first[manager], ...?second[manager]}.toList(),
-  };
-}
-
-/// Everything the flutter tool needs on Linux besides the SDK checkout.
-const _commonPackages = {
-  'dnf': ['git', 'curl', 'unzip', 'xz', 'which', 'zip'],
-  'apt-get': ['git', 'curl', 'unzip', 'xz-utils', 'zip'],
-  'zypper': ['git', 'curl', 'unzip', 'xz', 'which', 'zip'],
-  'pacman': ['git', 'curl', 'unzip', 'xz', 'which', 'zip'],
-};
-
-const _rpmHostPackages = {
-  'dnf': ['git', 'clang', 'cmake', 'ninja-build', 'gtk3-devel', 'rpm-build'],
-  'apt-get': ['git', 'clang', 'cmake', 'ninja-build', 'libgtk-3-dev', 'rpm'],
-  'zypper': ['git', 'clang', 'cmake', 'ninja', 'gtk3-devel', 'rpm-build'],
-  'pacman': ['git', 'clang', 'cmake', 'ninja', 'gtk3', 'rpm-tools'],
-};
-
-const _debHostPackages = {
-  'dnf': ['clang', 'cmake', 'ninja-build', 'gtk3-devel', 'dpkg-dev'],
-  'apt-get': [
-    'git',
-    'clang',
-    'cmake',
-    'ninja-build',
-    'libgtk-3-dev',
-    'dpkg-dev',
-  ],
-  'zypper': ['git', 'clang', 'cmake', 'ninja', 'gtk3-devel', 'dpkg'],
-  'pacman': ['git', 'clang', 'cmake', 'ninja', 'gtk3', 'dpkg'],
-};
-
-const _tarGzHostPackages = {
-  'dnf': ['git', 'clang', 'cmake', 'ninja-build', 'gtk3-devel', 'tar'],
-  'apt-get': ['git', 'clang', 'cmake', 'ninja-build', 'libgtk-3-dev', 'tar'],
-  'zypper': ['git', 'clang', 'cmake', 'ninja', 'gtk3-devel', 'tar'],
-  'pacman': ['git', 'clang', 'cmake', 'ninja', 'gtk3', 'tar'],
-};
-
-/// makepkg ships with pacman itself; base-devel adds fakeroot and friends.
-const _pacmanHostPackages = {
-  'pacman': ['git', 'clang', 'cmake', 'ninja', 'gtk3', 'base-devel'],
-};
-
-const _appImageHostPackages = {
-  'dnf': ['git', 'clang', 'cmake', 'ninja-build', 'gtk3-devel'],
-  'apt-get': ['git', 'clang', 'cmake', 'ninja-build', 'libgtk-3-dev'],
-  'zypper': ['git', 'clang', 'cmake', 'ninja', 'gtk3-devel'],
-  'pacman': ['git', 'clang', 'cmake', 'ninja', 'gtk3'],
-};
-
-const _windowsKitPackages = {
-  'dnf': ['zip'],
-  'apt-get': ['zip'],
-  'zypper': ['zip'],
-  'pacman': ['zip'],
-};
-
-const _androidHostPackages = {
-  'dnf': ['git', 'unzip', 'java-latest-openjdk-devel'],
-  'apt-get': ['git', 'unzip', 'openjdk-17-jdk'],
-  'zypper': ['git', 'unzip', 'java-17-openjdk-devel'],
-  'pacman': ['git', 'unzip', 'jdk17-openjdk'],
-};

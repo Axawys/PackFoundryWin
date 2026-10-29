@@ -2,166 +2,102 @@
   <img src="assets/icon.png" alt="PackFoundry" width="160">
 </p>
 
-<h1 align="center">PackFoundry</h1>
+<h1 align="center">PackFoundry for Windows</h1>
 
 <p align="center">
-  Сборка установщиков Flutter-приложений для Linux, Android и Windows в несколько кликов.
+  Сборка установщиков Flutter-приложений для Windows в несколько кликов.
 </p>
 
-PackFoundry — GUI-приложение на Flutter, которое помогает упаковывать Flutter-проекты в готовые пакеты без ручной рутины с `flutter build`, Docker/Podman, `rpmbuild`, `dpkg-deb`, AppImageTool, Android SDK и Windows/Inno Setup.
+PackFoundry — GUI-приложение на Flutter, которое упаковывает Flutter-проекты в готовый `setup.exe` без ручной рутины с `flutter build windows`, Visual Studio и Inno Setup. Это Windows-версия проекта [PackFoundry](https://github.com/Axawys/PackFoundry), изначально написанного под Linux.
 
-Главная идея: выбрать проект, указать метаданные релиза, отметить нужные форматы и нажать Build. PackFoundry проверяет окружение, готовит временную копию проекта, собирает пакеты, показывает наглядный roadmap и сохраняет артефакты в выбранную папку.
+Главная идея: выбрать проект, указать метаданные релиза, отметить нужные цели и нажать «Собрать». PackFoundry проверяет инструменты, готовит временную копию проекта, собирает приложение, генерирует сценарий Inno Setup и сохраняет установщик в выбранную папку.
 
 ## Возможности
 
-- Сборка Linux-пакетов: AppImage, `.deb`, `.rpm`, pacman `.pkg.tar.zst` для Arch Linux и переносимый архив `tar.gz`.
-- Сборка Android APK через Flutter и локальный Android SDK.
-- Windows build kit: переносимый zip с проектом, Inno Setup config и PowerShell-скриптом для сборки `.exe` на Windows.
-- Управляемые container builders для сборки пакетов не под текущий дистрибутив: Debian builder для DEB, Fedora builder для RPM.
-- Быстрый режим host-сборки для формата текущего Linux-дистрибутива.
-- Установка и диагностика инструментов сборки прямо из настроек.
-- Дополнительные зависимости пакетов: `Depends` для DEB, `Requires` для RPM и `depends` для pacman.
-- Экран сборки из двух панелей: план этапов с прогрессом и консоль с командами выбранного этапа и журналом процессов.
-- Кнопка запуска проекта без сборки для быстрой проверки.
-- Инспектор готовых пакетов: метаданные, зависимости, иконка и дерево файлов внутри пакета.
-- Редактирование metadata/control и зависимостей DEB-пакета с сохранением измененной копии.
+- **setup.exe**: сборка Windows-установщика прямо на этом компьютере (`flutter build windows --release` + Inno Setup).
+- **build_setup.cmd**: экспорт самодостаточного скрипта, который собирает тот же `setup.exe` на любом Windows-компьютере двойным щелчком.
+- **APK**: сборка Android APK через Flutter и Android SDK и отправка на подключённое устройство через `adb`.
+- Проверка и установка инструментов из настроек: Flutter SDK, Git, Visual Studio Build Tools (C++), Inno Setup, режим разработчика, Android SDK и Java (через `winget`).
+- Иконка `.png` или `.ico` превращается в `.ico` для установщика и для `windows\runner\resources\app_icon.ico`.
+- Экран сборки: план этапов с прогрессом, команды `cmd.exe` для каждого этапа и журнал с живым выводом `flutter` и `ISCC`.
+- Кнопка запуска проекта без сборки (`flutter run -d windows`).
 - Конфигурационный файл `packfoundry.json` для повторяемых сборок.
-- Русская и английская локализация, светлая/темная/системная тема.
+- Русская и английская локализация, светлая/тёмная/системная тема.
 
-## Поддерживаемые артефакты
+## Требования
 
-| Платформа | Формат | Статус |
+| Инструмент | Для чего | Установка |
 | --- | --- | --- |
-| Linux | AppImage | Работает |
-| Linux | `.deb` | Работает нативно на DEB-based системах или через Debian builder |
-| Linux | `.rpm` | Работает нативно на Fedora/RHEL-like системах или через Fedora builder |
-| Linux | pacman `.pkg.tar.zst` | Работает нативно на Arch-based системах через `makepkg` |
-| Linux | `tar.gz` | Работает; переносимый архив, а не пакет для пакетного менеджера |
-| Android | APK | Работает |
-| Windows | Inno Setup `.exe` | Работает через Windows build kit |
-| macOS | `.dmg` | Запланировано |
-| iOS | `.ipa` | Запланировано |
+| Flutter SDK | любая сборка | [docs.flutter.dev](https://docs.flutter.dev/get-started/install/windows/desktop) или кнопка в «Настройках» (клонирует в `%LOCALAPPDATA%\PackFoundry\flutter`) |
+| Git | Flutter SDK и git-зависимости | `winget install --id Git.Git -e` |
+| Visual Studio 2022 / Build Tools с «Desktop development with C++» | `flutter build windows` | `winget install --id Microsoft.VisualStudio.2022.BuildTools -e --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"` |
+| Inno Setup 6 | `setup.exe` | `winget install --id JRSoftware.InnoSetup -e` |
+| Режим разработчика Windows | проекты с плагинами (symlink) | `start ms-settings:developers` |
+| Android SDK, Java | только APK | кнопка в «Настройках» (`%LOCALAPPDATA%\PackFoundry\android-sdk`, `Microsoft.OpenJDK.17`) |
+
+PackFoundry ищет `flutter.bat`, `ISCC.exe`, `git.exe` и `vswhere.exe` по файлам: в `PATH`, в `Program Files`, `Program Files (x86)` и `%LOCALAPPDATA%\Programs`, поэтому ничего не нужно добавлять в `PATH` вручную.
 
 ## Рабочие пространства
 
 ### Настройки
 
-Здесь PackFoundry показывает доступность инструментов и builders:
-
-- RPM: host-инструменты или Fedora builder.
-- DEB: host-инструменты или Debian builder.
-- PACMAN: Linux toolchain, `makepkg` и `fakeroot` (`base-devel`) на Arch-based системе.
-- AppImage: Flutter/Linux toolchain и AppImageTool.
-- TAR.GZ: Flutter/Linux toolchain и `tar`.
-- EXE: создание Windows build kit.
-- APK: Flutter, Android SDK и Java.
-
-В этой же вкладке находятся настройки интерфейса: тема и язык.
+Доступность инструментов по группам (FLUTTER, EXE, APK) с кнопкой установки недостающего, а также тема, язык и папка экспорта по умолчанию.
 
 ### Проект
 
-Здесь выбирается Flutter-проект и настраивается будущая сборка:
-
-- папка проекта;
-- импорт/экспорт `packfoundry.json`;
-- размер окна Linux desktop-приложения;
-- иконка `.png` или `.svg`;
+- папка Flutter-проекта и импорт/экспорт `packfoundry.json`;
+- размер окна Windows-приложения (патчится `windows\runner\main.cpp` во временной копии);
+- иконка `.png`, `.ico` или `.svg` (SVG используется только для предпросмотра, для установщика берётся иконка runner);
 - тег релиза, разработчик, email, сайт, лицензия и описание;
-- имя выходного пакета;
-- папка экспорта;
-- форматы установщиков;
-- дополнительные зависимости для DEB/RPM/pacman.
+- название приложения (из него строится имя выходного файла) и папка экспорта;
+- цели сборки: `setup.exe`, `build_setup.cmd`, `apk`.
 
-PackFoundry работает с временной копией проекта. Настройки вроде размера окна и иконки применяются к build workspace, исходный проект не переписывается.
+Настройки окна и иконки применяются только к временной копии проекта, исходники не переписываются.
 
 ### Сборка
 
-Здесь запускается сборка и отображается процесс. Экран целиком помещается в окно:
+- «Собрать» — собрать выбранные цели; «Запустить» — `flutter run -d windows` для проверки.
+- Слева «План сборки» — этапы со статусом и прогрессом.
+- Справа сверху — команды `cmd.exe` выбранного этапа с реальными путями; их можно скопировать по этапу или целиком как `.cmd`-скрипт.
+- Справа снизу — журнал процессов с выводом `flutter build` и `ISCC.exe` в реальном времени.
 
-- Build — собрать выбранные пакеты; Run — запустить выбранный Flutter-проект для теста.
-- Слева «План сборки» — этапы со статусом и прогрессом; выбор следует за текущим этапом, по клику можно открыть любой другой.
-- Справа сверху — shell-команды выбранного этапа с реальными путями и именами; их можно скопировать по этапу или целиком как bash-скрипт.
-- Справа снизу — журнал процессов с подробностями выполнения и ошибок.
+## Цели сборки
 
-### Пакеты
+### setup.exe
 
-Инспектор готовых пакетов. Можно выбрать файл `.deb`, `.rpm`, `.AppImage`, `.tar.gz`, `.apk`, `.exe` или `.zip` и посмотреть:
+1. Проект копируется во `%TEMP%\pack_foundry_build_*` (вместе с локальными `path:`-зависимостями).
+2. Применяются размер окна и иконка.
+3. `flutter build windows --release`.
+4. Генерируется `setup.iss`: название, версия из тега, издатель, сайт, email, лицензия и описание, иконка, файл `LICENSE` проекта (если есть), русский и английский языки мастера, ярлыки в меню «Пуск» и на рабочем столе.
+5. `ISCC.exe` компилирует установщик в папку экспорта.
 
-- формат, имя, размер и путь;
-- metadata/control;
-- зависимости;
-- иконку, если она найдена внутри пакета;
-- дерево файлов внутри архива/пакета.
+Установщик позволяет поставить приложение для всех пользователей или только для текущего (без прав администратора) и поддерживает тихую установку `/VERYSILENT /CURRENTUSER`.
 
-Для DEB доступно редактирование metadata/control и зависимостей с сохранением новой копии `*_edited.deb`. RPM и часть других форматов показываются в режиме просмотра: их корректнее менять через параметры сборки и пересборку.
+### build_setup.cmd
 
-## Примеры использования
+В папку экспорта записываются `build_setup.cmd`, `setup.iss`, `setup.ico` и `license.txt`. Скрипт:
 
-### Пример 1: собрать AppImage и RPM на Fedora
+- проверяет Flutter, Git, Visual Studio с C++ (через `vswhere`) и Inno Setup, для отсутствующих выводит команду `winget` или ссылку;
+- предупреждает, если выключен режим разработчика;
+- выполняет `flutter pub get` и `flutter build windows --release`;
+- собирает установщик через `ISCC` в папку `output` рядом со скриптом и печатает путь к нему;
+- при ошибке завершается с кодом 1; в конце всегда делает `pause`, чтобы окно не закрылось.
 
-1. Откройте PackFoundry.
-2. Во вкладке «Настройки» убедитесь, что RPM host tools и AppImageTool доступны. Если нет — нажмите установку недостающих инструментов.
-3. Во вкладке «Проект» выберите папку Flutter-проекта.
-4. Укажите тег релиза, например `v1.3.0`, иконку и папку экспорта.
-5. В «Установщиках» отметьте AppImage и RPM.
-6. Нажмите Build во вкладке «Сборка».
-7. В папке экспорта появятся `.AppImage` и `.rpm`.
+Папка проекта берётся из первого аргумента, иначе — папка скрипта, если в ней лежит `pubspec.yaml`, иначе — путь проекта, выбранный в PackFoundry:
 
-### Пример 2: собрать DEB на Fedora через builder
-
-1. Во вкладке «Настройки» установите DEB builder.
-2. Во вкладке «Проект» выберите приложение и папку экспорта.
-3. Отметьте `deb package`.
-4. Если нужно, добавьте зависимость в DEB Depends, например:
-
-```text
-libgtk-3-0 | libgtk-3-0t64
+```bat
+build_setup.cmd D:\src\hash_checker
 ```
 
-5. Нажмите Build.
-6. PackFoundry запустит Debian builder и сохранит `.deb` в папку экспорта.
+`set PACKFOUNDRY_NO_PAUSE=1` отключает финальную паузу (удобно для CI). Скрипт собирает исходный проект как есть, без временной копии: размер окна и иконка runner из PackFoundry к нему не применяются.
 
-### Пример 3: собрать Windows EXE через Windows build kit
+> MSBuild не работает с очень длинными путями (ошибка `FTK1011`). Если проект лежит глубоко, перенесите его ближе к корню диска.
 
-1. На Linux выберите Flutter-проект и отметьте Windows / Inno Setup exe.
-2. Нажмите Build.
-3. В папке экспорта появится архив:
+### APK
 
-```text
-*_windows_1.3.0_x64_build_kit.zip
-```
-
-4. Скопируйте архив в Windows 10/11 или Windows VM.
-5. Распакуйте его и выполните в PowerShell:
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\scripts\build_windows.ps1
-```
-
-Скрипт проверит Flutter SDK, Visual Studio Build Tools, Inno Setup и Developer Mode. Готовый `.exe` появится в папке `output`.
-
-### Пример 4: проверить готовый DEB-пакет
-
-1. Откройте вкладку «Пакеты».
-2. Нажмите «Выбрать пакет» и выберите `.deb`.
-3. Посмотрите metadata, зависимости, иконку и дерево файлов.
-4. При необходимости измените `Depends` или control metadata.
-5. Нажмите «Сохранить измененную копию».
+`flutter build apk --release` во временной копии и копирование в экспорт. Кнопка «Отправить на устройство» собирает APK в папке проекта и ставит его через `adb install -r` с обработкой понижения версии и конфликта подписи.
 
 ## Конфигурационный файл
-
-PackFoundry умеет импортировать и экспортировать `packfoundry.json`. Это удобно, если вы хотите один раз описать проект, форматы пакетов и metadata, а потом менять только тег релиза.
-
-Особое значение:
-
-```text
-$choose_in_packfoundry
-```
-
-означает, что путь будет выбран пользователем в интерфейсе.
-
-Пример:
 
 ```json
 {
@@ -176,76 +112,28 @@ $choose_in_packfoundry
   "homepageUrl": "https://example.com/hashchecker",
   "license": "GPL-2.0-only",
   "description": "A desktop tool for checking file hashes.",
-  "window": {
-    "width": 1280,
-    "height": 800
-  },
-  "packageTypes": [
-    "appimage",
-    "deb",
-    "rpm",
-    "pacman",
-    "tar.gz",
-    "apk",
-    "exe"
-  ],
-  "additionalDependencies": {
-    "deb": "libgtk-3-0 | libgtk-3-0t64",
-    "rpm": "webkit2gtk4.1",
-    "pacman": "webkit2gtk-4.1"
-  }
+  "window": { "width": 1280, "height": 800 },
+  "packageTypes": ["exe", "cmd", "apk"]
 }
 ```
 
-Поддерживаемые `packageTypes`: `appimage`, `deb`, `rpm`, `pacman`, `tar.gz`, `apk`, `exe`, `dmg`, `ipa`.
-
-`additionalDependencies` добавляет зависимости к стандартному набору PackFoundry:
-
-- `deb` записывается в `Depends`;
-- `rpm` записывается в `Requires`;
-- `pacman` записывается в `depends` в PKGBUILD.
+`$choose_in_packfoundry` означает, что путь выбирается в интерфейсе. Относительные пути считаются от папки конфига. Поддерживаемые `packageTypes`: `exe`, `cmd`, `apk`.
 
 ## Имена выходных файлов
 
-PackFoundry использует единый шаблон имен:
-
 ```text
-AppName_platform_version_arch.ext
+AppName_windows_1.3.0_x64_setup.exe
+AppName_android_1.3.0_universal.apk
 ```
-
-Примеры:
-
-```text
-HashChecker_linux_1.3.0_x64.AppImage
-HashChecker_linux_1.3.0_x64.tar.gz
-HashChecker_linux_1.3.0_x64.deb
-HashChecker_linux_1.3.0-1_x64.rpm
-HashChecker_linux_1.3.0-1_x64.pkg.tar.zst
-HashChecker_android_1.3.0_universal.apk
-HashChecker_windows_1.3.0_x64_build_kit.zip
-```
-
-## Как работает сборка
-
-PackFoundry создает временную копию проекта, применяет build-only настройки и запускает нужный pipeline:
-
-- AppImage собирается через Linux release bundle и AppImageTool.
-- DEB собирается через `dpkg-deb`; на не-DEB системах используется Debian builder.
-- RPM собирается через `rpmbuild`; на не-RPM системах используется Fedora builder.
-- pacman-пакет собирается через `makepkg` по сгенерированному PKGBUILD и ставится командой `sudo pacman -U <файл>.pkg.tar.zst`.
-- `tar.gz` упаковывает Linux release bundle в переносимый архив: его распаковывают и запускают `bundle/<имя>`. Пакетные менеджеры (`pacman -U`, `apt`, `dnf`) такой архив не устанавливают, для Arch используйте pacman-пакет.
-- APK собирается через `flutter build apk --release`.
-- Windows EXE собирается через переносимый build kit, который запускается на Windows.
-
-Builders кэшируются и переиспользуются, поэтому первая установка может быть долгой, а последующие сборки идут заметно быстрее.
 
 ## Разработка
 
-```sh
+```bat
 flutter pub get
 flutter analyze
 flutter test
-flutter run -d linux
+flutter run -d windows
+flutter build windows --release
 ```
 
 ## Структура проекта
@@ -253,8 +141,8 @@ flutter run -d linux
 ```text
 lib/
   core/
-    models/       # модели сборки, конфигов, инструментов и инспектора пакетов
-    services/     # сборка, builders, toolchain, config, package inspector
+    models/       # модели сборки, конфигов и инструментов
+    services/     # сборка, Windows-инструменты, генерация setup.iss и build_setup.cmd, конфиги
   l10n/           # локализация
   ui/
     pages/        # основные страницы приложения

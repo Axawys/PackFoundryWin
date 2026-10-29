@@ -11,7 +11,6 @@ class ToolchainGroup {
     this.canRemove = false,
     this.installProgress,
     this.installSizeLabel,
-    this.guideSteps = const [],
     this.dependencyNote,
   });
 
@@ -24,7 +23,6 @@ class ToolchainGroup {
   final bool canRemove;
   final ToolInstallProgress? installProgress;
   final String? installSizeLabel;
-  final List<String> guideSteps;
 
   /// Shown when the group relies on tools from another group that are not
   /// ready yet, e.g. platform targets waiting for the common Flutter SDK.
@@ -105,15 +103,6 @@ class ToolInstallProgress {
 
 enum ToolAvailability { installed, available, missing }
 
-enum ToolchainInstallTarget {
-  common,
-  rpm,
-  deb,
-  pacman,
-  appImage,
-  tarGz,
-  exe,
-  android,
-}
+enum ToolchainInstallTarget { common, windows, android }
 
 enum ToolchainCategory { common, platform }

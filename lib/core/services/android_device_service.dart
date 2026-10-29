@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'windows_tools.dart';
+
 /// One entry of `adb devices -l`.
 class AndroidDevice {
   const AndroidDevice({
@@ -98,11 +100,9 @@ class AndroidDeviceService {
 
     for (final candidate in _executableCandidates()) {
       try {
-        final result = await Process.run(
-          candidate,
-          const ['version'],
-          runInShell: true,
-        ).timeout(const Duration(seconds: 6));
+        final result = await Process.run(candidate, const [
+          'version',
+        ], runInShell: true).timeout(const Duration(seconds: 6));
         if (result.exitCode == 0) {
           _cachedExecutable = candidate;
           return candidate;
@@ -123,11 +123,10 @@ class AndroidDeviceService {
     }
 
     try {
-      final result = await Process.run(
-        executable,
-        const ['devices', '-l'],
-        runInShell: true,
-      ).timeout(const Duration(seconds: 15));
+      final result = await Process.run(executable, const [
+        'devices',
+        '-l',
+      ], runInShell: true).timeout(const Duration(seconds: 15));
       if (result.exitCode != 0) {
         return const [];
       }
@@ -166,42 +165,7 @@ class AndroidDeviceService {
   }
 
   List<String> _executableCandidates() {
-    final candidates = <String>['adb'];
-    for (final variable in const ['ANDROID_HOME', 'ANDROID_SDK_ROOT']) {
-      final root = Platform.environment[variable];
-      if (root != null && root.isNotEmpty) {
-        candidates.add(_joinPath(root, 'platform-tools/adb'));
-      }
-    }
-    candidates.add(
-      _joinPath(
-        _userDataDirectory().path,
-        'pack_foundry/android-sdk/platform-tools/adb',
-      ),
-    );
-    return candidates;
-  }
-
-  Directory _userDataDirectory() {
-    final xdgDataHome = Platform.environment['XDG_DATA_HOME'];
-    if (xdgDataHome != null && xdgDataHome.isNotEmpty) {
-      return Directory(xdgDataHome);
-    }
-    final home = Platform.environment['HOME'];
-    if (home != null && home.isNotEmpty) {
-      return Directory(_joinPath(home, '.local/share'));
-    }
-    return Directory.systemTemp;
-  }
-
-  String _joinPath(String first, String second) {
-    if (second.isEmpty) {
-      return first;
-    }
-    final normalizedSecond = second.replaceAll('/', Platform.pathSeparator);
-    if (first.endsWith(Platform.pathSeparator)) {
-      return '$first$normalizedSecond';
-    }
-    return '$first${Platform.pathSeparator}$normalizedSecond';
+    final found = WindowsTools().findAdb();
+    return [if (found != null) found.path, 'adb'];
   }
 }

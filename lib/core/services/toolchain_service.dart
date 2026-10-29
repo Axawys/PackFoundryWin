@@ -4,16 +4,17 @@ import 'dart:io';
 
 import '../models/tool_status.dart';
 import 'flutter_locator.dart';
+import 'windows_tools.dart';
 
 /// Reports progress of a single install step. [fraction] is 0-1, or null when
 /// the running tool does not expose measurable progress.
 typedef ToolProgressCallback = void Function(double? fraction, String detail);
 
 class ToolchainService {
-  static const _appImageToolBaseUrl =
-      'https://github.com/AppImage/AppImageKit/releases/download/continuous';
+  ToolchainService({WindowsTools? tools}) : _tools = tools ?? WindowsTools();
+
   static const _androidCommandLineToolsUrl =
-      'https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip';
+      'https://dl.google.com/android/repository/commandlinetools-win-11076708_latest.zip';
   static const _cancelledMessage = 'Installation was cancelled.';
   static final _gitPhasePattern = RegExp(
     r'(Counting objects|Compressing objects|Receiving objects|Resolving deltas|Updating files):\s+(\d+)%',
@@ -23,6 +24,7 @@ class ToolchainService {
     r'^(\d{1,3})\s+[\d.]+[kMG]?\s+\d{1,3}\s+[\d.]+[kMG]?\s',
   );
 
+  final WindowsTools _tools;
   Process? _activeProcess;
   HttpClient? _activeHttpClient;
   var _cancelRequested = false;
@@ -35,24 +37,25 @@ class ToolchainService {
   }
 
   /// Stops the running download or process of the current installation.
-  /// Privileged package manager runs are left alone because pkexec children
-  /// cannot be signalled by the user and an interrupted transaction is unsafe.
+  /// winget runs are left alone: an interrupted installer can leave a broken
+  /// program behind.
   Future<void> cancelActiveInstall() async {
     _cancelRequested = true;
-    _activeProcess?.kill(ProcessSignal.sigterm);
+    final process = _activeProcess;
+    if (process != null) {
+      await killProcessTree(process);
+    }
     _activeHttpClient?.close(force: true);
   }
 
   File get managedFlutterExecutable => FlutterLocator().managedExecutable;
 
-  Directory get managedAndroidSdkDirectory => Directory(
-    _joinPath(_userDataDirectory().path, 'pack_foundry/android-sdk'),
-  );
+  Directory get managedAndroidSdkDirectory => _tools.managedAndroidSdk;
 
   File get managedSdkManager => File(
     _joinPath(
       managedAndroidSdkDirectory.path,
-      'cmdline-tools/latest/bin/sdkmanager',
+      'cmdline-tools/latest/bin/sdkmanager.bat',
     ),
   );
 
@@ -65,7 +68,7 @@ class ToolchainService {
         executable,
         arguments,
         runInShell: true,
-      ).timeout(const Duration(seconds: 4));
+      ).timeout(const Duration(seconds: 20));
       return result.exitCode == 0
           ? ToolAvailability.installed
           : ToolAvailability.missing;
@@ -84,80 +87,129 @@ class ToolchainService {
     return commandAvailability(flutter.path, ['--version']);
   }
 
-  Future<ToolAvailability> appImageToolAvailability() async {
-    final systemStatus = await commandAvailability('appimagetool', [
-      '--version',
-    ]);
-    if (systemStatus == ToolAvailability.installed) {
-      return systemStatus;
-    }
-    final cachedTool = _cachedAppImageToolFile();
-    return cachedTool.existsSync()
+  Future<ToolAvailability> gitAvailability() async {
+    return _tools.findGit() == null
+        ? ToolAvailability.missing
+        : ToolAvailability.installed;
+  }
+
+  Future<ToolAvailability> innoSetupAvailability() async {
+    return _tools.findInnoCompiler() == null
+        ? ToolAvailability.missing
+        : ToolAvailability.installed;
+  }
+
+  Future<ToolAvailability> visualStudioAvailability() async {
+    return await _tools.findVisualStudioWithCpp() == null
+        ? ToolAvailability.missing
+        : ToolAvailability.installed;
+  }
+
+  Future<ToolAvailability> developerModeAvailability() async {
+    return await _tools.developerModeEnabled()
         ? ToolAvailability.installed
         : ToolAvailability.missing;
   }
 
   Future<ToolAvailability> androidSdkAvailability() async {
-    final sdkRoot =
-        Platform.environment['ANDROID_HOME'] ??
-        Platform.environment['ANDROID_SDK_ROOT'];
-    if (sdkRoot != null && sdkRoot.isNotEmpty) {
-      final platformsDirectory = Directory(_joinPath(sdkRoot, 'platforms'));
-      if (platformsDirectory.existsSync()) {
+    return _tools.findAndroidSdk() == null
+        ? ToolAvailability.missing
+        : ToolAvailability.installed;
+  }
+
+  /// Java on PATH, in JAVA_HOME, or the runtime bundled with Android Studio,
+  /// which Flutter uses for Gradle on its own.
+  Future<ToolAvailability> javaAvailability() async {
+    final candidates = <String>[
+      if (_tools.findOnPath('java.exe') case final file?) file.path,
+      if (_tools.variable('JAVA_HOME') case final home? when home.isNotEmpty)
+        _joinPath(home, 'bin/java.exe'),
+      for (final root in [
+        _tools.variable('ProgramFiles'),
+        _tools.variable('LOCALAPPDATA') == null
+            ? null
+            : _joinPath(_tools.variable('LOCALAPPDATA')!, 'Programs'),
+      ])
+        if (root != null && root.isNotEmpty)
+          _joinPath(root, 'Android/Android Studio/jbr/bin/java.exe'),
+    ];
+    for (final candidate in candidates) {
+      if (File(candidate).existsSync()) {
         return ToolAvailability.installed;
       }
-    }
-
-    final systemStatus = await commandAvailability('sdkmanager', ['--version']);
-    if (systemStatus == ToolAvailability.installed) {
-      return systemStatus;
-    }
-    final managedPlatforms = Directory(
-      _joinPath(managedAndroidSdkDirectory.path, 'platforms'),
-    );
-    if (managedSdkManager.existsSync() && managedPlatforms.existsSync()) {
-      return commandAvailability(managedSdkManager.path, ['--version']);
     }
     return ToolAvailability.missing;
   }
 
-  Future<ToolInstallResult> installSystemPackages({
-    required Map<String, List<String>> packagesByManager,
+  /// Opens the Windows settings page with the Developer Mode switch, which
+  /// needs administrator rights to flip and therefore stays a user action.
+  Future<void> openDeveloperSettings() async {
+    await Process.run('cmd.exe', const [
+      '/c',
+      'start',
+      'ms-settings:developers',
+    ]);
+  }
+
+  /// Installs a package with winget. Installers may show their own UAC
+  /// prompt; their output is forwarded line by line.
+  Future<ToolInstallResult> installWithWinget(
+    String packageId, {
+    List<String> extraArguments = const [],
     ToolProgressCallback? onProgress,
   }) async {
-    final manager = await _detectPackageManager();
-    if (manager == null) {
+    final winget =
+        _tools.findOnPath('winget.exe') ??
+        File(
+          _joinPath(
+            _tools.variable('LOCALAPPDATA') ?? '',
+            'Microsoft/WindowsApps/winget.exe',
+          ),
+        );
+    if (!winget.existsSync()) {
       return const ToolInstallResult.failure(
-        'Could not find a supported package manager.',
-      );
-    }
-
-    final packages = packagesByManager[manager.executable];
-    if (packages == null || packages.isEmpty) {
-      return ToolInstallResult.failure(
-        'No install recipe is available for ${manager.executable}.',
-      );
-    }
-
-    final pkexec = await _findExecutable('pkexec');
-    if (pkexec == null) {
-      return const ToolInstallResult.failure(
-        'pkexec was not found. Install polkit or run package installation manually.',
+        'winget was not found. Install "App Installer" from Microsoft Store '
+        'or install the tool manually.',
       );
     }
 
     try {
-      onProgress?.call(null, 'Waiting for administrator authorization.');
+      onProgress?.call(null, 'winget install --id $packageId');
       final result = await _runStreamed(
-        pkexec.path,
-        [...manager.installArguments, ...packages],
+        winget.path,
+        [
+          'install',
+          '--id',
+          packageId,
+          '--exact',
+          '--source',
+          'winget',
+          '--accept-source-agreements',
+          '--accept-package-agreements',
+          '--disable-interactivity',
+          ...extraArguments,
+        ],
         trackForCancel: false,
-        onLine: (line) => onProgress?.call(null, line),
+        onLine: (line) {
+          final percent = _percentPattern.firstMatch(line);
+          onProgress?.call(
+            percent == null
+                ? null
+                : (double.tryParse(percent.group(1)!) ?? 0) / 100,
+            line,
+          );
+        },
       );
-      if (result.exitCode == 0) {
-        return ToolInstallResult.success(
-          'Installed packages: ${packages.join(', ')}.',
-        );
+      // "No newer package versions are available" is not a failure.
+      final alreadyInstalled =
+          result.exitCode == -1978335189 ||
+          result.outputTail.any(
+            (line) =>
+                line.contains('already installed') ||
+                line.contains('No newer package versions'),
+          );
+      if (result.exitCode == 0 || alreadyInstalled) {
+        return ToolInstallResult.success('Installed $packageId.');
       }
       return ToolInstallResult.failure(result.shortOutput);
     } on ProcessException catch (error) {
@@ -165,111 +217,21 @@ class ToolchainService {
     }
   }
 
-  Future<ToolInstallResult> enableDockerService() async {
-    final systemctl = await _findExecutable('systemctl');
-    if (systemctl == null) {
-      return const ToolInstallResult.success(
-        'systemctl was not found; skipping Docker service activation.',
-      );
-    }
-    final pkexec = await _findExecutable('pkexec');
-    if (pkexec == null) {
-      return const ToolInstallResult.failure(
-        'pkexec was not found. Docker was installed, but the service could not be enabled automatically.',
-      );
-    }
-
-    final result = await Process.run(
-      pkexec.path,
-      [systemctl.path, 'enable', '--now', 'docker'],
-      stdoutEncoding: utf8,
-      stderrEncoding: utf8,
-    );
-    if (result.exitCode == 0) {
-      return const ToolInstallResult.success('Docker service is enabled.');
-    }
-    return ToolInstallResult.failure(_shortProcessOutput(result));
-  }
-
-  Future<ToolInstallResult> addCurrentUserToDockerGroup() async {
-    final user = Platform.environment['USER'];
-    if (user == null || user.isEmpty) {
-      return const ToolInstallResult.success(
-        'Could not detect current user; skipping docker group setup.',
-      );
-    }
-    final groupsResult = await Process.run(
-      'id',
-      ['-nG', user],
-      stdoutEncoding: utf8,
-      stderrEncoding: utf8,
-    );
-    if (groupsResult.exitCode == 0 &&
-        groupsResult.stdout
-            .toString()
-            .split(RegExp(r'\s+'))
-            .contains('docker')) {
-      return const ToolInstallResult.success(
-        'Current user is already in docker group.',
-      );
-    }
-
-    final pkexec = await _findExecutable('pkexec');
-    if (pkexec == null) {
-      return const ToolInstallResult.failure(
-        'pkexec was not found. Docker is installed, but user group setup could not be completed.',
-      );
-    }
-    final result = await Process.run(
-      pkexec.path,
-      ['usermod', '-aG', 'docker', user],
-      stdoutEncoding: utf8,
-      stderrEncoding: utf8,
-    );
-    if (result.exitCode == 0) {
-      return const ToolInstallResult.success(
-        'Current user was added to docker group. Log out and log back in before using Docker without sudo.',
-      );
-    }
-    return ToolInstallResult.failure(_shortProcessOutput(result));
-  }
-
-  Future<ToolInstallResult> installAppImageTool({
-    ToolProgressCallback? onProgress,
-  }) async {
-    final destination = _cachedAppImageToolFile();
-    try {
-      await destination.parent.create(recursive: true);
-      await _downloadFile(
-        Uri.parse(
-          '$_appImageToolBaseUrl/appimagetool-${_appImageArchitecture()}.AppImage',
-        ),
-        destination,
-        onProgress: onProgress,
-      );
-      await _makeExecutable(destination);
-      return ToolInstallResult.success(
-        'Downloaded appimagetool to ${destination.path}.',
-      );
-    } on Object catch (error) {
-      if (destination.existsSync()) {
-        await destination.delete();
-      }
-      return ToolInstallResult.failure(
-        _cancelRequested ? _cancelledMessage : error.toString(),
-      );
-    }
-  }
-
   Future<ToolInstallResult> installFlutterSdk({
     ToolProgressCallback? onProgress,
   }) async {
+    final git = _tools.findGit();
+    if (git == null) {
+      return const ToolInstallResult.failure(
+        'Git was not found. Install Git first: ${WindowsTools.gitWinget}',
+      );
+    }
     try {
       final flutterExecutable = managedFlutterExecutable;
       final sdkDirectory = flutterExecutable.parent.parent;
       if (flutterExecutable.existsSync()) {
         onProgress?.call(null, 'Updating Flutter SDK.');
-        final upgradeResult = await _runStreamed('git', [
+        final upgradeResult = await _runStreamed(git.path, [
           '-C',
           sdkDirectory.path,
           'pull',
@@ -291,7 +253,7 @@ class ToolchainService {
         await sdkDirectory.parent.create(recursive: true);
         onProgress?.call(0, 'Cloning Flutter SDK (stable).');
         final cloneResult = await _runStreamed(
-          'git',
+          git.path,
           [
             'clone',
             '--progress',
@@ -404,20 +366,16 @@ class ToolchainService {
             'Android command line tools: $detail',
           ),
         );
-        final unzip = await _findExecutable('unzip');
-        if (unzip == null) {
-          return const ToolInstallResult.failure(
-            'unzip was not found. Install unzip and try again.',
-          );
-        }
         final extractDirectory = Directory(
           _joinPath(tempDirectory.path, 'extract'),
         );
         await extractDirectory.create(recursive: true);
         onProgress?.call(0.25, 'Extracting Android command line tools.');
+        // tar.exe ships with Windows 10 1803+ and reads zip archives.
+        final systemRoot = _tools.variable('SystemRoot') ?? r'C:\Windows';
         final unzipResult = await Process.run(
-          unzip.path,
-          ['-q', zipFile.path, '-d', extractDirectory.path],
+          _joinPath(systemRoot, 'System32/tar.exe'),
+          ['-xf', zipFile.path, '-C', extractDirectory.path],
           stdoutEncoding: utf8,
           stderrEncoding: utf8,
         );
@@ -442,7 +400,11 @@ class ToolchainService {
         return const ToolInstallResult.failure(_cancelledMessage);
       }
       onProgress?.call(0.3, 'Accepting Android SDK licenses.');
-      final licenseResult = await _acceptAndroidLicenses(sdkManager, sdkRoot);
+      final licenseResult = await _runSdkManagerWithYes(
+        sdkManager,
+        sdkRoot,
+        const ['--licenses'],
+      );
       if (!licenseResult.success) {
         return licenseResult;
       }
@@ -494,56 +456,6 @@ class ToolchainService {
         await tempDirectory.delete(recursive: true);
       }
     }
-  }
-
-  Future<bool> anyCommandAvailable(List<CommandCheck> checks) async {
-    for (final check in checks) {
-      final status = await commandAvailability(
-        check.executable,
-        check.arguments,
-      );
-      if (status == ToolAvailability.installed) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  Future<bool> allCommandsAvailable(List<CommandCheck> checks) async {
-    for (final check in checks) {
-      final status = await commandAvailability(
-        check.executable,
-        check.arguments,
-      );
-      if (status != ToolAvailability.installed) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  Future<_PackageManager?> _detectPackageManager() async {
-    for (final manager in _packageManagers) {
-      if (await _findExecutable(manager.executable) != null) {
-        return manager;
-      }
-    }
-    return null;
-  }
-
-  Future<File?> _findExecutable(String executableName) async {
-    final pathVariable = Platform.environment['PATH'];
-    if (pathVariable == null || pathVariable.isEmpty) {
-      return null;
-    }
-
-    for (final directory in pathVariable.split(':')) {
-      final candidate = File(_joinPath(directory, executableName));
-      if (candidate.existsSync()) {
-        return candidate;
-      }
-    }
-    return null;
   }
 
   Future<void> _downloadFile(
@@ -612,7 +524,12 @@ class ToolchainService {
     List<String> stdinLines = const [],
     bool trackForCancel = true,
   }) async {
-    final process = await Process.start(executable, arguments);
+    final lower = executable.toLowerCase();
+    final process = await Process.start(
+      executable,
+      arguments,
+      runInShell: lower.endsWith('.bat') || lower.endsWith('.cmd'),
+    );
     if (trackForCancel) {
       _activeProcess = process;
     }
@@ -663,13 +580,6 @@ class ToolchainService {
     }
   }
 
-  Future<void> _makeExecutable(File file) async {
-    if (!Platform.isLinux && !Platform.isMacOS) {
-      return;
-    }
-    await Process.run('chmod', ['755', file.path]);
-  }
-
   Future<void> _copyDirectory(Directory source, Directory destination) async {
     await destination.create(recursive: true);
     await for (final entity in source.list(
@@ -683,54 +593,8 @@ class ToolchainService {
       } else if (entity is File) {
         await File(newPath).parent.create(recursive: true);
         await entity.copy(newPath);
-      } else if (entity is Link) {
-        await Link(newPath).create(await entity.target(), recursive: true);
       }
     }
-  }
-
-  File _cachedAppImageToolFile() {
-    return File(
-      _joinPath(
-        _joinPath(_userCacheDirectory().path, 'pack_foundry/tools'),
-        'appimagetool-${_appImageArchitecture()}.AppImage',
-      ),
-    );
-  }
-
-  Directory _userCacheDirectory() {
-    final xdgCacheHome = Platform.environment['XDG_CACHE_HOME'];
-    if (xdgCacheHome != null && xdgCacheHome.isNotEmpty) {
-      return Directory(xdgCacheHome);
-    }
-
-    final home = Platform.environment['HOME'];
-    if (home != null && home.isNotEmpty) {
-      return Directory(_joinPath(home, '.cache'));
-    }
-
-    return Directory.systemTemp;
-  }
-
-  Directory _userDataDirectory() {
-    final xdgDataHome = Platform.environment['XDG_DATA_HOME'];
-    if (xdgDataHome != null && xdgDataHome.isNotEmpty) {
-      return Directory(xdgDataHome);
-    }
-
-    final home = Platform.environment['HOME'];
-    if (home != null && home.isNotEmpty) {
-      return Directory(_joinPath(home, '.local/share'));
-    }
-
-    return Directory.systemTemp;
-  }
-
-  Future<ToolInstallResult> _acceptAndroidLicenses(
-    File sdkManager,
-    Directory sdkRoot,
-  ) async {
-    return _runSdkManagerWithYes(sdkManager, sdkRoot, const ['--licenses']);
   }
 
   Future<ToolInstallResult> _runSdkManagerWithYes(
@@ -754,21 +618,6 @@ class ToolchainService {
       );
     }
     return ToolInstallResult.failure(result.shortOutput);
-  }
-
-  String _appImageArchitecture() {
-    try {
-      final architecture = Process.runSync('uname', [
-        '-m',
-      ]).stdout.toString().trim();
-      return switch (architecture) {
-        'aarch64' => 'aarch64',
-        'arm64' => 'aarch64',
-        _ => 'x86_64',
-      };
-    } on Object {
-      return 'x86_64';
-    }
   }
 
   String _shortProcessOutput(ProcessResult result) {
@@ -801,13 +650,6 @@ class ToolchainService {
   }
 }
 
-class CommandCheck {
-  const CommandCheck(this.executable, this.arguments);
-
-  final String executable;
-  final List<String> arguments;
-}
-
 class _StreamedResult {
   const _StreamedResult(this.exitCode, this.outputTail);
 
@@ -835,32 +677,3 @@ class ToolInstallResult {
   final bool success;
   final String message;
 }
-
-class _PackageManager {
-  const _PackageManager({
-    required this.executable,
-    required this.installArguments,
-  });
-
-  final String executable;
-  final List<String> installArguments;
-}
-
-const _packageManagers = [
-  _PackageManager(
-    executable: 'dnf',
-    installArguments: ['dnf', 'install', '-y'],
-  ),
-  _PackageManager(
-    executable: 'apt-get',
-    installArguments: ['apt-get', 'install', '-y'],
-  ),
-  _PackageManager(
-    executable: 'zypper',
-    installArguments: ['zypper', '--non-interactive', 'install'],
-  ),
-  _PackageManager(
-    executable: 'pacman',
-    installArguments: ['pacman', '-S', '--needed', '--noconfirm'],
-  ),
-];

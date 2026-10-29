@@ -14,7 +14,11 @@ void main() {
   tearDown(() => project.delete(recursive: true));
 
   Future<String> addAsset(String name, {int bytes = 10}) async {
-    final file = File('${project.path}/assets/$name');
+    final separator = Platform.pathSeparator;
+    final file = File(
+      '${project.path}${separator}assets$separator'
+      '${name.replaceAll('/', separator)}',
+    );
     await file.create(recursive: true);
     await file.writeAsBytes(List.filled(bytes, 0));
     return file.path;

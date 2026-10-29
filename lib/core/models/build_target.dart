@@ -6,6 +6,11 @@ class BuildTarget {
     this.selected = false,
   });
 
+  /// Artifact names of the targets PackFoundry builds.
+  static const setupExe = 'Inno Setup exe';
+  static const buildScript = 'Build script';
+  static const apk = 'APK';
+
   final String platform;
   final String artifact;
   TargetStatus status;
@@ -15,17 +20,13 @@ class BuildTarget {
     return status == TargetStatus.ready || status == TargetStatus.installable;
   }
 
-  /// Short, language-agnostic package-format label shown in the target picker
-  /// (e.g. `appimage`, `deb`, `.exe`). Falls back to [artifact] for formats
-  /// without a dedicated short name.
+  /// Short, language-agnostic label shown in the target picker. Falls back to
+  /// [artifact] for formats without a dedicated short name.
   String get displayLabel {
     return switch (artifact) {
-      'AppImage' => 'appimage',
-      'deb package' => 'deb',
-      'rpm package' => 'rpm',
-      'pacman package' => 'pacman',
-      'tar.gz bundle' => 'tar.gz',
-      'Inno Setup exe' => '.exe',
+      setupExe => 'setup.exe',
+      buildScript => 'build_setup.cmd',
+      apk => 'apk',
       _ => artifact,
     };
   }
@@ -35,10 +36,9 @@ class BuildTarget {
       TargetStatus.ready => 'Ready to build on this machine',
       TargetStatus.installable => 'Install extra tools to enable',
       TargetStatus.blocked => 'Blocked until SDK/toolchain is installed',
-      TargetStatus.hostLimited => 'Requires native host or remote builder',
       TargetStatus.missingPlatform => 'Platform is not added to the project',
     };
   }
 }
 
-enum TargetStatus { ready, installable, blocked, hostLimited, missingPlatform }
+enum TargetStatus { ready, installable, blocked, missingPlatform }

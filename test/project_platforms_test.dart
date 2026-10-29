@@ -23,15 +23,16 @@ void main() {
 
   test('detects platforms by their project files', () async {
     expect(ProjectPlatforms.supports(project.path, 'Android'), isFalse);
-    expect(ProjectPlatforms.supports(project.path, 'Linux'), isFalse);
     expect(ProjectPlatforms.supports(project.path, 'Windows'), isFalse);
 
     await touch('android/app/build.gradle.kts');
-    await touch('linux/CMakeLists.txt');
 
     expect(ProjectPlatforms.supports(project.path, 'Android'), isTrue);
-    expect(ProjectPlatforms.supports(project.path, 'Linux'), isTrue);
     expect(ProjectPlatforms.supports(project.path, 'Windows'), isFalse);
+
+    await touch('windows/CMakeLists.txt');
+
+    expect(ProjectPlatforms.supports(project.path, 'Windows'), isTrue);
   });
 
   test(
@@ -55,7 +56,7 @@ void main() {
               targets: [
                 BuildTarget(
                   platform: 'Android',
-                  artifact: 'APK',
+                  artifact: BuildTarget.apk,
                   status: TargetStatus.ready,
                   selected: true,
                 ),

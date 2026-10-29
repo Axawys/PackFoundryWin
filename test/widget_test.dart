@@ -51,20 +51,20 @@ void main() {
   test('creates a pending roadmap preview from selected targets', () {
     final targets = [
       BuildTarget(
-        platform: 'Linux',
-        artifact: 'AppImage',
+        platform: 'Windows',
+        artifact: BuildTarget.setupExe,
         status: TargetStatus.ready,
         selected: true,
       ),
       BuildTarget(
-        platform: 'Linux',
-        artifact: 'deb package',
+        platform: 'Windows',
+        artifact: BuildTarget.buildScript,
         status: TargetStatus.ready,
         selected: true,
       ),
       BuildTarget(
-        platform: 'Linux',
-        artifact: 'rpm package',
+        platform: 'Android',
+        artifact: BuildTarget.apk,
         status: TargetStatus.ready,
       ),
     ];
@@ -73,31 +73,45 @@ void main() {
 
     expect(
       steps.map((step) => step.id),
-      containsAll(<String>[
+      containsAllInOrder(<String>[
         'project',
+        'build-script',
         'workspace',
-        'local-build',
-        'bundle',
-        'appimage',
-        'deb-container',
-        'deb-build',
-        'deb-package',
+        'windows-build',
+        'installer',
         'summary',
         'cleanup',
       ]),
     );
-    expect(steps.map((step) => step.id), isNot(contains('rpm')));
+    expect(steps.map((step) => step.id), isNot(contains('android-build')));
     expect(
       steps.every((step) => step.state == BuildRoadmapStepState.pending),
       isTrue,
     );
   });
 
+  test('exports only the script without a temporary workspace', () {
+    final steps = BuildService().createRoadmapPlan([
+      BuildTarget(
+        platform: 'Windows',
+        artifact: BuildTarget.buildScript,
+        status: TargetStatus.ready,
+        selected: true,
+      ),
+    ]);
+
+    expect(steps.map((step) => step.id), [
+      'project',
+      'build-script',
+      'summary',
+    ]);
+  });
+
   test('creates an APK roadmap preview from Android target', () {
     final targets = [
       BuildTarget(
         platform: 'Android',
-        artifact: 'APK',
+        artifact: BuildTarget.apk,
         status: TargetStatus.ready,
         selected: true,
       ),
@@ -116,47 +130,40 @@ void main() {
         'cleanup',
       ]),
     );
-    expect(steps.map((step) => step.id), isNot(contains('local-build')));
-    expect(steps.map((step) => step.id), isNot(contains('bundle')));
+    expect(steps.map((step) => step.id), isNot(contains('windows-build')));
   });
 
-  test('creates a pacman roadmap preview from Arch target', () {
-    final target = BuildTarget(
-      platform: 'Linux',
-      artifact: 'pacman package',
-      status: TargetStatus.ready,
-      selected: true,
-    );
-
-    final steps = BuildService().createRoadmapPlan([target]);
-
+  test('maps targets to config package types and labels', () {
     expect(
-      steps.map((step) => step.id),
-      containsAllInOrder(<String>[
-        'project',
-        'workspace',
-        'local-build',
-        'bundle',
-        'pacman',
-        'summary',
-        'cleanup',
-      ]),
+      ProjectConfig.packageTypeForTarget('Windows', BuildTarget.setupExe),
+      'exe',
     );
-    expect(target.displayLabel, 'pacman');
     expect(
-      ProjectConfig.packageTypeForTarget(target.platform, target.artifact),
-      'pacman',
+      ProjectConfig.packageTypeForTarget('Windows', BuildTarget.buildScript),
+      'cmd',
+    );
+    expect(
+      ProjectConfig.packageTypeForTarget('Android', BuildTarget.apk),
+      'apk',
+    );
+    expect(
+      BuildTarget(
+        platform: 'Windows',
+        artifact: BuildTarget.buildScript,
+        status: TargetStatus.ready,
+      ).displayLabel,
+      'build_setup.cmd',
     );
   });
 
-  testWidgets('shows makepkg commands for the pacman step', (tester) async {
+  testWidgets('shows ISCC commands for the installer step', (tester) async {
     // Tall enough for the lazily built command list to show every command.
     tester.view.physicalSize = const Size(1280, 1800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final target = BuildTarget(
-      platform: 'Linux',
-      artifact: 'pacman package',
+      platform: 'Windows',
+      artifact: BuildTarget.setupExe,
       status: TargetStatus.ready,
       selected: true,
     );
@@ -185,13 +192,12 @@ void main() {
               homepageUrl: 'https://example.com',
               license: 'GPL-2.0-only',
               description: 'Checks file hashes.',
-              projectPath: '/home/user/Hash Checker',
-              outputPath: '/home/user/Packages',
+              projectPath: r'C:\Users\user\Hash Checker',
+              outputPath: r'C:\Users\user\Packages',
               iconPath: null,
               windowWidth: null,
               windowHeight: null,
               targets: [target],
-              additionalDependencies: const {'pacman': 'webkit2gtk-4.1'},
             ),
             onBuild: () {},
             isRunning: false,
@@ -203,15 +209,15 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('PACMAN'));
+    await tester.tap(find.text('SETUP.EXE'));
     await tester.pump();
 
-    expect(find.text('Commands · PACMAN'), findsOneWidget);
+    expect(find.text('Commands · SETUP.EXE'), findsOneWidget);
+    expect(find.textContaining('"/O%EXPORT%"'), findsOneWidget);
     expect(
-      find.text("PACMAN_DEPENDS=('gtk3' 'gcc-libs' 'xz' 'webkit2gtk-4.1')"),
+      find.text(r'dir "%EXPORT%\Hash Checker_windows_2.1.1_x64_setup.exe"'),
       findsOneWidget,
     );
-    expect(find.textContaining('makepkg --force --nodeps'), findsOneWidget);
   });
 
   test('saves and loads PackFoundry project config', () async {
@@ -221,7 +227,8 @@ void main() {
     addTearDown(() => tempDir.delete(recursive: true));
 
     final service = ProjectConfigService();
-    final configPath = '${tempDir.path}/packfoundry.json';
+    final separator = Platform.pathSeparator;
+    final configPath = '${tempDir.path}${separator}packfoundry.json';
     final config = ProjectConfig(
       projectPath: '.',
       outputPath: ProjectConfig.chooseInPackFoundry,
@@ -235,23 +242,20 @@ void main() {
       description: 'Checks file hashes.',
       windowWidth: 1280,
       windowHeight: 800,
-      packageTypes: const ['appimage', 'deb', 'rpm'],
-      additionalDependencies: const {
-        'deb': 'libgtk-3-0 | libgtk-3-0t64',
-        'rpm': 'webkit2gtk4.1',
-      },
+      packageTypes: const ['exe', 'cmd', 'apk'],
     );
 
     await service.save(configPath, config);
     final loaded = await service.load(configPath);
 
-    expect(loaded.projectPath, '${tempDir.path}/.');
+    expect(loaded.projectPath, '${tempDir.path}$separator.');
     expect(loaded.choosesOutput, isTrue);
-    expect(loaded.iconPath, '${tempDir.path}/assets/icon.png');
+    expect(
+      loaded.iconPath,
+      '${tempDir.path}${separator}assets${separator}icon.png',
+    );
     expect(loaded.releaseTag, 'v2.1.1');
-    expect(loaded.packageTypes, ['appimage', 'deb', 'rpm']);
-    expect(loaded.additionalDependencies['deb'], 'libgtk-3-0 | libgtk-3-0t64');
-    expect(loaded.additionalDependencies['rpm'], 'webkit2gtk4.1');
+    expect(loaded.packageTypes, ['exe', 'cmd', 'apk']);
   });
 
   testWidgets('shows roadmap before starting the selected build', (
@@ -267,9 +271,9 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    final appImageTarget = find.text('appimage');
-    await tester.ensureVisible(appImageTarget);
-    await tester.tap(appImageTarget);
+    final setupTarget = find.text('setup.exe');
+    await tester.ensureVisible(setupTarget);
+    await tester.tap(setupTarget);
     await tester.pump();
 
     await tester.tap(find.text('Build'));
@@ -277,7 +281,7 @@ void main() {
 
     expect(find.text('Build plan'), findsOneWidget);
     expect(find.text('Process log'), findsOneWidget);
-    expect(find.text('APPIMAGE'), findsOneWidget);
+    expect(find.text('SETUP.EXE'), findsOneWidget);
     expect(find.text('Flutter build'), findsOneWidget);
     expect(find.text('Full'), findsNothing);
     expect(find.text('Simplified'), findsNothing);
@@ -294,8 +298,8 @@ void main() {
     tester,
   ) async {
     final target = BuildTarget(
-      platform: 'Linux',
-      artifact: 'AppImage',
+      platform: 'Windows',
+      artifact: BuildTarget.setupExe,
       status: TargetStatus.ready,
       selected: true,
     );
@@ -342,9 +346,9 @@ void main() {
                 homepageUrl: 'https://example.com',
                 license: 'GPL-2.0-only',
                 description: 'Checks file hashes.',
-                projectPath: '/home/user/Hash Checker',
-                outputPath: '/home/user/Packages',
-                iconPath: '/home/user/hashchecker.png',
+                projectPath: r'C:\Users\user\Hash Checker',
+                outputPath: r'C:\Users\user\100% Packages',
+                iconPath: r'C:\Users\user\hashchecker.png',
                 windowWidth: 1280,
                 windowHeight: 800,
                 targets: [target],
@@ -362,31 +366,37 @@ void main() {
 
     // The first step is selected before the build starts.
     expect(find.text('Commands · Project'), findsOneWidget);
-    expect(find.text("PROJECT='/home/user/Hash Checker'"), findsOneWidget);
-    expect(find.text("EXPORT='/home/user/Packages'"), findsOneWidget);
-    expect(find.text("APP_NAME='Hash Checker'"), findsOneWidget);
-    expect(find.text("VERSION='2.1.1'"), findsOneWidget);
-    expect(find.text('flutter build linux --release'), findsNothing);
+    expect(
+      find.text(r'set "PROJECT=C:\Users\user\Hash Checker"'),
+      findsOneWidget,
+    );
+    // Percent signs are doubled inside a .cmd script.
+    expect(
+      find.text(r'set "EXPORT=C:\Users\user\100%% Packages"'),
+      findsOneWidget,
+    );
+    expect(find.text('call flutter build windows --release'), findsNothing);
 
     await tester.tap(find.text('Flutter build'));
     await tester.pump();
 
     expect(find.text('Commands · Flutter build'), findsOneWidget);
-    expect(find.text('flutter build linux --release'), findsOneWidget);
-    expect(find.text("PROJECT='/home/user/Hash Checker'"), findsNothing);
-    final commands = tester
-        .widgetList<SelectableText>(find.byType(SelectableText))
-        .map((widget) => widget.data ?? '')
-        .toList();
-    expect(commands.any((command) => command.contains(r'\"')), isFalse);
+    expect(find.text('call flutter build windows --release'), findsOneWidget);
+    expect(
+      find.text(r'set "PROJECT=C:\Users\user\Hash Checker"'),
+      findsNothing,
+    );
 
     await tester.tap(find.text('Full script'));
     await tester.pump();
 
-    expect(clipboardText, startsWith('#!/usr/bin/env bash'));
-    expect(clipboardText, contains("PROJECT='/home/user/Hash Checker'"));
-    expect(clipboardText, contains('flutter build linux --release'));
-    expect(clipboardText, isNot(contains('<project>')));
+    expect(clipboardText, startsWith('@echo off\r\n'));
+    expect(
+      clipboardText,
+      contains(r'set "PROJECT=C:\Users\user\Hash Checker"'),
+    );
+    expect(clipboardText, contains('call flutter build windows --release'));
+    expect(clipboardText, isNot(contains('#!/usr/bin/env bash')));
   });
 
   testWidgets('remembers release metadata fields', (tester) async {
@@ -526,8 +536,7 @@ void main() {
                   id: 'cleanup',
                   number: 1,
                   title: 'Cleanup',
-                  description:
-                      'Remove temporary workspaces. Docker builds may contain many generated files.',
+                  description: 'Remove the temporary workspace.',
                   state: BuildRoadmapStepState.running,
                   progress: 40,
                   estimatedSeconds: 180,
@@ -582,10 +591,10 @@ void main() {
                   estimatedSeconds: 10,
                 ),
                 BuildRoadmapStep(
-                  id: 'local-build',
+                  id: 'windows-build',
                   number: 2,
                   title: 'Flutter build',
-                  description: 'Compile the Linux release bundle on the host.',
+                  description: 'Compile the Windows release runner.',
                   state: BuildRoadmapStepState.running,
                   progress: 50,
                   estimatedSeconds: 120,
@@ -594,8 +603,7 @@ void main() {
                   id: 'cleanup',
                   number: 3,
                   title: 'Cleanup',
-                  description:
-                      'Remove temporary workspaces. Docker builds may contain many generated files.',
+                  description: 'Remove the temporary workspace.',
                   state: BuildRoadmapStepState.pending,
                   progress: 0,
                   estimatedSeconds: 180,
@@ -649,10 +657,10 @@ void main() {
     await tester.pumpWidget(
       buildPanel(const [
         BuildRoadmapStep(
-          id: 'local-build',
+          id: 'windows-build',
           number: 1,
           title: 'Flutter build',
-          description: 'Compile the Linux release bundle on the host.',
+          description: 'Compile the Windows release runner.',
           state: BuildRoadmapStepState.running,
           progress: 20,
           estimatedSeconds: 120,
@@ -661,8 +669,7 @@ void main() {
           id: 'cleanup',
           number: 2,
           title: 'Cleanup',
-          description:
-              'Remove temporary workspaces. Docker builds may contain many generated files.',
+          description: 'Remove the temporary workspace.',
           state: BuildRoadmapStepState.pending,
           progress: 0,
           estimatedSeconds: 180,
@@ -676,10 +683,10 @@ void main() {
     await tester.pumpWidget(
       buildPanel(const [
         BuildRoadmapStep(
-          id: 'local-build',
+          id: 'windows-build',
           number: 1,
           title: 'Flutter build',
-          description: 'Compile the Linux release bundle on the host.',
+          description: 'Compile the Windows release runner.',
           state: BuildRoadmapStepState.success,
           progress: 100,
           estimatedSeconds: 120,
@@ -688,8 +695,7 @@ void main() {
           id: 'cleanup',
           number: 2,
           title: 'Cleanup',
-          description:
-              'Remove temporary workspaces. Docker builds may contain many generated files.',
+          description: 'Remove the temporary workspace.',
           state: BuildRoadmapStepState.running,
           progress: 30,
           estimatedSeconds: 180,
@@ -791,17 +797,17 @@ void main() {
                   id: 'cleanup',
                   number: 1,
                   title: 'Cleanup',
-                  description:
-                      'Remove temporary workspaces. Docker builds may contain many generated files.',
+                  description: 'Remove the temporary workspace.',
                   state: BuildRoadmapStepState.running,
                   progress: cleanupProgress,
                   estimatedSeconds: 180,
                 ),
                 const BuildRoadmapStep(
-                  id: 'rpm',
+                  id: 'installer',
                   number: 2,
-                  title: 'RPM',
-                  description: 'Generate spec metadata and run rpmbuild.',
+                  title: 'SETUP.EXE',
+                  description:
+                      'Generate setup.iss and compile it with Inno Setup.',
                   state: BuildRoadmapStepState.pending,
                   progress: 0,
                   estimatedSeconds: 25,
@@ -822,13 +828,13 @@ void main() {
     await tester.pumpWidget(buildPanel(40));
     expect(find.text('Commands · Cleanup'), findsOneWidget);
 
-    await tester.tap(find.text('RPM'));
+    await tester.tap(find.text('SETUP.EXE'));
     await tester.pump();
-    expect(find.text('Commands · RPM'), findsOneWidget);
+    expect(find.text('Commands · SETUP.EXE'), findsOneWidget);
 
     await tester.pumpWidget(buildPanel(60));
     await tester.pump();
-    expect(find.text('Commands · RPM'), findsOneWidget);
+    expect(find.text('Commands · SETUP.EXE'), findsOneWidget);
   });
 
   testWidgets('fits the build workspace into the window', (tester) async {
@@ -842,9 +848,9 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    final appImageTarget = find.text('appimage');
-    await tester.ensureVisible(appImageTarget);
-    await tester.tap(appImageTarget);
+    final setupTarget = find.text('setup.exe');
+    await tester.ensureVisible(setupTarget);
+    await tester.tap(setupTarget);
     await tester.pump();
     await tester.tap(find.text('Build'));
     await tester.pump();

@@ -12,20 +12,24 @@ class ProjectPlatforms {
   /// not need one for that platform.
   static String? folderFor(String platform) {
     return switch (platform) {
-      'Linux' => 'linux',
-      'Android' => 'android',
       'Windows' => 'windows',
+      'Android' => 'android',
       _ => null,
     };
   }
 
   static bool supports(String projectPath, String platform) {
+    final separator = Platform.pathSeparator;
     return switch (platform) {
-      'Linux' => File('$projectPath/linux/CMakeLists.txt').existsSync(),
-      'Windows' => File('$projectPath/windows/CMakeLists.txt').existsSync(),
+      'Windows' => File(
+        '$projectPath${separator}windows${separator}CMakeLists.txt',
+      ).existsSync(),
       'Android' =>
-        File('$projectPath/android/app/build.gradle').existsSync() ||
-            File('$projectPath/android/app/build.gradle.kts').existsSync(),
+        File('$projectPath${separator}android${separator}app${separator}build.gradle')
+                .existsSync() ||
+            File(
+              '$projectPath${separator}android${separator}app${separator}build.gradle.kts',
+            ).existsSync(),
       _ => true,
     };
   }

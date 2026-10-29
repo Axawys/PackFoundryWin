@@ -1,4 +1,5 @@
 import 'build_configuration.dart';
+import 'build_target.dart';
 
 class ProjectConfig {
   const ProjectConfig({
@@ -15,7 +16,6 @@ class ProjectConfig {
     required this.windowWidth,
     required this.windowHeight,
     required this.packageTypes,
-    this.additionalDependencies = const {},
   });
 
   static const chooseInPackFoundry = r'$choose_in_packfoundry';
@@ -34,7 +34,6 @@ class ProjectConfig {
   final int? windowWidth;
   final int? windowHeight;
   final List<String> packageTypes;
-  final Map<String, String> additionalDependencies;
 
   bool get choosesProject => _isChooseMarker(projectPath);
   bool get choosesOutput => _isChooseMarker(outputPath);
@@ -55,13 +54,11 @@ class ProjectConfig {
       'description': description,
       'window': {'width': windowWidth, 'height': windowHeight},
       'packageTypes': packageTypes,
-      'additionalDependencies': additionalDependencies,
     };
   }
 
   static ProjectConfig fromJson(Map<String, Object?> json) {
     final window = json['window'];
-    final additionalDependencies = json['additionalDependencies'];
     return ProjectConfig(
       projectPath: _stringValue(json['projectPath']),
       outputPath: _stringValue(json['outputPath']),
@@ -76,9 +73,6 @@ class ProjectConfig {
       windowWidth: window is Map ? _intValue(window['width']) : null,
       windowHeight: window is Map ? _intValue(window['height']) : null,
       packageTypes: _packageTypes(json),
-      additionalDependencies: additionalDependencies is Map
-          ? _stringMap(additionalDependencies)
-          : const {},
     );
   }
 
@@ -101,21 +95,14 @@ class ProjectConfig {
           if (target.selected)
             packageTypeForTarget(target.platform, target.artifact),
       ],
-      additionalDependencies: config.additionalDependencies,
     );
   }
 
   static String packageTypeForTarget(String platform, String artifact) {
     return switch ((platform, artifact)) {
-      ('Linux', 'AppImage') => 'appimage',
-      ('Linux', 'deb package') => 'deb',
-      ('Linux', 'rpm package') => 'rpm',
-      ('Linux', 'pacman package') => 'pacman',
-      ('Linux', 'tar.gz bundle') => 'tar.gz',
-      ('Windows', 'Inno Setup exe') => 'exe',
-      ('Android', 'APK') => 'apk',
-      ('macOS', 'dmg') => 'dmg',
-      ('iOS', 'ipa') => 'ipa',
+      ('Windows', BuildTarget.setupExe) => 'exe',
+      ('Windows', BuildTarget.buildScript) => 'cmd',
+      ('Android', BuildTarget.apk) => 'apk',
       _ => '${platform.toLowerCase()}:${artifact.toLowerCase()}',
     };
   }
@@ -166,13 +153,5 @@ class ProjectConfig {
       for (final value in rawTypes)
         if (value is String && value.trim().isNotEmpty) value.trim(),
     ];
-  }
-
-  static Map<String, String> _stringMap(Map<Object?, Object?> values) {
-    return {
-      for (final entry in values.entries)
-        if (entry.key is String && entry.value is String)
-          (entry.key! as String).trim(): (entry.value! as String).trim(),
-    }..removeWhere((key, value) => key.isEmpty || value.isEmpty);
   }
 }
