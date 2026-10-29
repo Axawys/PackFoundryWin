@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pack_foundry/core/models/build_configuration.dart';
 import 'package:pack_foundry/core/models/build_log_entry.dart';
 import 'package:pack_foundry/core/models/build_target.dart';
+import 'package:pack_foundry/core/models/output_file_name.dart';
 import 'package:pack_foundry/core/services/build_service.dart';
 import 'package:pack_foundry/core/services/windows_icon.dart';
 import 'package:pack_foundry/core/services/windows_installer_files.dart';
@@ -55,10 +56,27 @@ void main() {
     expect(metadata.version, '2.1.1');
     expect(metadata.exeName, 'hash_checker.exe');
     expect(metadata.description, 'Checks file hashes.');
+    expect(metadata.setupFileName, 'Hash- Checker-_2.1.1_setup.exe');
+  });
+
+  test('builds file names from the chosen parts', () {
+    String name(Set<FileNamePart> parts, String kind) => OutputFileName(
+      parts,
+    ).baseName(appName: 'HashChecker', version: '1.3.0', kind: kind);
+
     expect(
-      metadata.setupFileName,
-      'Hash- Checker-_windows_2.1.1_x64_setup.exe',
+      name(FileNamePart.values.toSet(), 'setup'),
+      'HashChecker_windows_1.3.0_x64_setup',
     );
+    expect(
+      name(OutputFileName.defaultParts, 'setup'),
+      'HashChecker_1.3.0_setup',
+    );
+    expect(
+      name({FileNamePart.version, FileNamePart.architecture}, 'portable'),
+      '1.3.0_x64_portable',
+    );
+    expect(name(const {}, 'setup'), 'setup');
   });
 
   test('generates an Inno Setup script from the metadata', () {
@@ -89,7 +107,7 @@ void main() {
     );
     expect(
       lines.where((line) => line.startsWith('OutputBaseFilename=')).single,
-      startsWith('OutputBaseFilename=Hash -Checker- {beta}_windows_2.1.1'),
+      'OutputBaseFilename=Hash -Checker- {beta}_2.1.1_setup',
     );
   });
 
@@ -103,18 +121,12 @@ void main() {
     );
     final lines = script.split('\r\n');
 
-    expect(
-      metadata.portableFileName,
-      'Hash Checker_windows_2.1.1_x64_portable.exe',
-    );
+    expect(metadata.portableFileName, 'Hash Checker_2.1.1_portable.exe');
     expect(lines, contains('Uninstallable=no'));
     expect(lines, contains('CreateAppDir=no'));
     expect(lines, contains('PrivilegesRequired=lowest'));
     expect(lines, contains('ShowLanguageDialog=no'));
-    expect(
-      lines,
-      contains('OutputBaseFilename=Hash Checker_windows_2.1.1_x64_portable'),
-    );
+    expect(lines, contains('OutputBaseFilename=Hash Checker_2.1.1_portable'));
     expect(lines, contains('SetupIconFile=setup.ico'));
     expect(script, contains(r'DestDir: "{tmp}\app"'));
     expect(script, contains('Flags: waituntilterminated'));

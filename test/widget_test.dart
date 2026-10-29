@@ -216,7 +216,7 @@ void main() {
     expect(find.text('Commands · SETUP.EXE'), findsOneWidget);
     expect(find.textContaining('"/O%EXPORT%"'), findsOneWidget);
     expect(
-      find.text(r'dir "%EXPORT%\Hash Checker_windows_2.1.1_x64_setup.exe"'),
+      find.text(r'dir "%EXPORT%\Hash Checker_2.1.1_setup.exe"'),
       findsOneWidget,
     );
   });

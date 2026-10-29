@@ -1,6 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter/foundation.dart';
 
+import '../core/models/output_file_name.dart';
+
 class AppLocalizations {
   AppLocalizations(this.locale);
 
@@ -153,6 +155,17 @@ class AppLocalizations {
   String get defaultOutputFolder =>
       _isRu ? 'Папка экспорта по умолчанию' : 'Default output folder';
   String get resetToBuiltIn => _isRu ? 'Сбросить' : 'Reset';
+  String get outputFileName =>
+      _isRu ? 'Имя файла установщика' : 'Installer file name';
+  String fileNamePart(FileNamePart part) {
+    return switch (part) {
+      FileNamePart.appName => _isRu ? 'Название приложения' : 'App name',
+      FileNamePart.system => _isRu ? 'Система' : 'System',
+      FileNamePart.version => _isRu ? 'Версия' : 'Version',
+      FileNamePart.architecture => _isRu ? 'Архитектура' : 'Architecture',
+    };
+  }
+
   String get developerDefaults =>
       _isRu ? 'Разработчик по умолчанию' : 'Developer defaults';
   String get developerDefaultsHint => _isRu

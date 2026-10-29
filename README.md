@@ -82,7 +82,7 @@ PackFoundry ищет `flutter.bat`, `ISCC.exe`, `git.exe` и `vswhere.exe` по 
 
 ### portable
 
-Использует ту же сборку `flutter build windows`, что и `setup.exe`: если выбраны обе цели, приложение собирается один раз. Из `portable.iss` Inno Setup собирает один `AppName_windows_1.3.0_x64_portable.exe`. При запуске он:
+Использует ту же сборку `flutter build windows`, что и `setup.exe`: если выбраны обе цели, приложение собирается один раз. Из `portable.iss` Inno Setup собирает один `AppName_1.3.0_portable.exe`. При запуске он:
 
 1. распаковывает приложение во временную папку `%TEMP%\is-*.tmp\app` (около секунды, без окон мастера и без прав администратора);
 2. запускает приложение и ждёт его закрытия;
@@ -138,11 +138,15 @@ build_setup.cmd D:\src\hash_checker
 
 ## Имена выходных файлов
 
+По умолчанию:
+
 ```text
-AppName_windows_1.3.0_x64_setup.exe
-AppName_windows_1.3.0_x64_portable.exe
+AppName_1.3.0_setup.exe
+AppName_1.3.0_portable.exe
 AppName_android_1.3.0_universal.apk
 ```
+
+Из чего состоит имя `setup.exe` и portable-файла, задаётся в «Настройки → Имя файла установщика»: название приложения, система (`windows`), версия и архитектура (`x64`). Рядом показан пример имени для текущего проекта. Со всеми частями получится `AppName_windows_1.3.0_x64_setup.exe`, без частей — просто `setup.exe` и `portable.exe`. Имя APK эта настройка не меняет.
 
 ## Разработка
 

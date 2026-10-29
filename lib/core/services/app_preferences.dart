@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/developer_defaults.dart';
 import '../models/licenses.dart';
+import '../models/output_file_name.dart';
 
 class AppPreferences {
   static const _themeModeKey = 'themeMode';
@@ -20,6 +21,7 @@ class AppPreferences {
   static const _githubProfileKey = 'githubProfile';
   static const _defaultLicenseKey = 'defaultLicense';
   static const _manualFieldsKey = 'manualFields';
+  static const _fileNamePartsKey = 'outputFileNameParts';
 
   Future<AppSettings> load() async {
     final preferences = await SharedPreferences.getInstance();
@@ -114,6 +116,26 @@ class AppPreferences {
     await preferences.setStringList(_manualFieldsKey, [
       for (final field in DeveloperField.values)
         if (!fields.contains(field)) field.name,
+    ]);
+  }
+
+  Future<Set<FileNamePart>> loadFileNameParts() async {
+    final preferences = await SharedPreferences.getInstance();
+    final names = preferences.getStringList(_fileNamePartsKey);
+    if (names == null) {
+      return OutputFileName.defaultParts;
+    }
+    return {
+      for (final part in FileNamePart.values)
+        if (names.contains(part.name)) part,
+    };
+  }
+
+  Future<void> saveFileNameParts(Set<FileNamePart> parts) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setStringList(_fileNamePartsKey, [
+      for (final part in FileNamePart.values)
+        if (parts.contains(part)) part.name,
     ]);
   }
 

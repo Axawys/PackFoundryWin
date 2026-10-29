@@ -1,4 +1,5 @@
 import 'build_target.dart';
+import 'output_file_name.dart';
 
 class BuildConfiguration {
   const BuildConfiguration({
@@ -15,6 +16,7 @@ class BuildConfiguration {
     required this.windowWidth,
     required this.windowHeight,
     required this.targets,
+    this.fileNameParts = OutputFileName.defaultParts,
   });
 
   final String appName;
@@ -30,4 +32,7 @@ class BuildConfiguration {
   final int? windowWidth;
   final int? windowHeight;
   final List<BuildTarget> targets;
+
+  /// What the Windows package file names are made of.
+  final Set<FileNamePart> fileNameParts;
 }

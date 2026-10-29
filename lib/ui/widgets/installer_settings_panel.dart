@@ -65,14 +65,18 @@ class InstallerSettingsPanel extends StatelessWidget {
           const SizedBox(height: 8),
           LayoutBuilder(
             builder: (context, constraints) {
-              final columns = switch (constraints.maxWidth) {
-                >= 900 => 3,
-                >= 560 => 2,
-                _ => 1,
-              };
+              // Tiles share the row while they are narrow and stop growing at
+              // maxTileWidth, so wide windows leave space at the end instead.
               const spacing = 10.0;
+              const minTileWidth = 280.0;
+              const maxTileWidth = 380.0;
+              final columns =
+                  ((constraints.maxWidth + spacing) / (minTileWidth + spacing))
+                      .floor()
+                      .clamp(1, targets.isEmpty ? 1 : targets.length);
               final itemWidth =
-                  (constraints.maxWidth - spacing * (columns - 1)) / columns;
+                  ((constraints.maxWidth - spacing * (columns - 1)) / columns)
+                      .clamp(0.0, maxTileWidth);
 
               return Wrap(
                 spacing: spacing,

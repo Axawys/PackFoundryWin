@@ -13,6 +13,7 @@ import '../../core/models/chip_tone.dart';
 import '../../core/models/config_preset.dart';
 import '../../core/models/developer_defaults.dart';
 import '../../core/models/licenses.dart';
+import '../../core/models/output_file_name.dart';
 import '../../core/models/project_config.dart';
 import '../../core/models/tool_status.dart';
 import '../../core/services/android_device_service.dart';
@@ -117,6 +118,7 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
   bool _iconAutoDetected = false;
   String? _outputPath;
   String? _defaultOutputPath;
+  Set<FileNamePart> _fileNameParts = OutputFileName.defaultParts;
   bool _isBuilding = false;
   bool _isRunningProject = false;
 
@@ -187,6 +189,7 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
     _replaceRoadmapWithPreview();
     _loadReleaseMetadata();
     _loadDefaultOutputPath();
+    _loadFileNameParts();
     _loadConfigPresets();
     if (widget.enableToolchainDiagnostics) {
       _refreshToolchainStatus();
@@ -315,6 +318,37 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       }
     });
     unawaited(_appPreferences.saveDefaultFields(_defaultFields));
+  }
+
+  Future<void> _loadFileNameParts() async {
+    final parts = await _appPreferences.loadFileNameParts();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _fileNameParts = parts;
+    });
+  }
+
+  void _setFileNameParts(Set<FileNamePart> parts) {
+    setState(() {
+      _fileNameParts = parts;
+    });
+    unawaited(_appPreferences.saveFileNameParts(parts));
+  }
+
+  /// The setup.exe name the chosen parts give for the current project.
+  String get _setupFileNamePreview {
+    final name = OutputFileName(_fileNameParts).baseName(
+      appName: WindowsInstallerMetadata.safeFileName(
+        WindowsInstallerMetadata.displayAppName(_appNameController.text),
+      ),
+      version: WindowsInstallerMetadata.safeFileName(
+        WindowsInstallerMetadata.releaseVersion(_releaseTagController.text),
+      ),
+      kind: 'setup',
+    );
+    return '$name.exe';
   }
 
   Future<void> _loadDefaultOutputPath() async {
@@ -908,6 +942,7 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       windowWidth: int.tryParse(_widthController.text),
       windowHeight: int.tryParse(_heightController.text),
       targets: _targets,
+      fileNameParts: _fileNameParts,
     );
 
     var hadWarning = false;
@@ -2296,6 +2331,9 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       onChooseOutput: _chooseOutputFolder,
       onChooseDefaultOutput: _chooseDefaultOutputFolder,
       onResetDefaultOutput: () => _setDefaultOutputPath(null),
+      fileNameParts: _fileNameParts,
+      fileNamePreview: _setupFileNamePreview,
+      onFileNamePartsChanged: _setFileNameParts,
       onTargetChanged: _setTargetSelection,
       onBuild: _runBuild,
       onRunProject: _runProjectWithoutBuild,
@@ -2441,6 +2479,9 @@ class _WorkspaceContent extends StatelessWidget {
     required this.onChooseOutput,
     required this.onChooseDefaultOutput,
     required this.onResetDefaultOutput,
+    required this.fileNameParts,
+    required this.fileNamePreview,
+    required this.onFileNamePartsChanged,
     required this.onTargetChanged,
     required this.onBuild,
     required this.onRunProject,
@@ -2505,6 +2546,9 @@ class _WorkspaceContent extends StatelessWidget {
   final VoidCallback onChooseOutput;
   final VoidCallback onChooseDefaultOutput;
   final VoidCallback onResetDefaultOutput;
+  final Set<FileNamePart> fileNameParts;
+  final String fileNamePreview;
+  final ValueChanged<Set<FileNamePart>> onFileNamePartsChanged;
   final void Function(BuildTarget target, bool selected) onTargetChanged;
   final VoidCallback onBuild;
   final VoidCallback onRunProject;
@@ -2531,6 +2575,9 @@ class _WorkspaceContent extends StatelessWidget {
           defaultOutputPath: defaultOutputPath,
           onChooseDefaultOutput: onChooseDefaultOutput,
           onResetDefaultOutput: onResetDefaultOutput,
+          fileNameParts: fileNameParts,
+          fileNamePreview: fileNamePreview,
+          onFileNamePartsChanged: onFileNamePartsChanged,
         ),
         const SizedBox(height: 16),
         ToolchainPanel(
@@ -2618,6 +2665,7 @@ class _WorkspaceContent extends StatelessWidget {
                   windowWidth: int.tryParse(widthController.text),
                   windowHeight: int.tryParse(heightController.text),
                   targets: targets,
+                  fileNameParts: fileNameParts,
                 ),
           onBuild: onBuild,
           onRun: onRunProject,

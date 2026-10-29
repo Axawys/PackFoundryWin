@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/models/output_file_name.dart';
 import '../../core/services/app_preferences.dart';
 import '../../l10n/app_localizations.dart';
 import 'section.dart';
@@ -13,6 +14,9 @@ class PreferencesPanel extends StatelessWidget {
     required this.defaultOutputPath,
     required this.onChooseDefaultOutput,
     required this.onResetDefaultOutput,
+    required this.fileNameParts,
+    required this.fileNamePreview,
+    required this.onFileNamePartsChanged,
     super.key,
   });
 
@@ -23,6 +27,11 @@ class PreferencesPanel extends StatelessWidget {
   final String? defaultOutputPath;
   final VoidCallback onChooseDefaultOutput;
   final VoidCallback onResetDefaultOutput;
+  final Set<FileNamePart> fileNameParts;
+
+  /// The setup.exe name the current parts give for the current project.
+  final String fileNamePreview;
+  final ValueChanged<Set<FileNamePart>> onFileNamePartsChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -105,6 +114,34 @@ class PreferencesPanel extends StatelessWidget {
                     label: Text(l10n.resetToBuiltIn),
                   ),
                 Text(defaultOutputPath ?? l10n.builtInOutputHint),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          _PreferenceRow(
+            label: l10n.outputFileName,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                for (final part in FileNamePart.values)
+                  FilterChip(
+                    label: Text(l10n.fileNamePart(part)),
+                    selected: fileNameParts.contains(part),
+                    onSelected: (selected) => onFileNamePartsChanged(
+                      selected
+                          ? {...fileNameParts, part}
+                          : ({...fileNameParts}..remove(part)),
+                    ),
+                  ),
+                Text(
+                  fileNamePreview,
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
               ],
             ),
           ),

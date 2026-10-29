@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import '../models/build_configuration.dart';
+import '../models/output_file_name.dart';
 import 'windows_tools.dart';
 
 /// Release metadata shared by the Inno Setup script and the build script.
@@ -14,7 +15,7 @@ class WindowsInstallerMetadata {
     required this.license,
     required this.description,
     required this.exeName,
-    required this.outputBaseName,
+    this.fileNameParts = OutputFileName.defaultParts,
   });
 
   factory WindowsInstallerMetadata.fromConfiguration(
@@ -33,7 +34,7 @@ class WindowsInstallerMetadata {
       license: configuration.license.trim(),
       description: _singleLine(configuration.description),
       exeName: windowsExecutableName(configuration.projectPath),
-      outputBaseName: setupBaseName(appName: appName, version: version),
+      fileNameParts: configuration.fileNameParts,
     );
   }
 
@@ -50,14 +51,22 @@ class WindowsInstallerMetadata {
   /// File name of the Flutter runner, `BINARY_NAME` from windows/CMakeLists.
   final String exeName;
 
-  /// Installer file name without `.exe`.
-  final String outputBaseName;
+  /// What [setupBaseName] and [portableBaseName] are made of.
+  final Set<FileNamePart> fileNameParts;
 
-  String get setupFileName => '$outputBaseName.exe';
+  /// Installer file name without `.exe`, e.g. `AppName_1.3.0_setup`.
+  String get setupBaseName => baseNameFor('setup');
+  String get portableBaseName => baseNameFor('portable');
+  String get setupFileName => '$setupBaseName.exe';
+  String get portableFileName => '$portableBaseName.exe';
 
-  /// `AppName_windows_1.3.0_x64_portable.exe`.
-  String get portableFileName =>
-      '${setupBaseName(appName: appName, version: version, kind: 'portable')}.exe';
+  String baseNameFor(String kind) {
+    return OutputFileName(fileNameParts).baseName(
+      appName: safeFileName(appName),
+      version: safeFileName(version),
+      kind: kind,
+    );
+  }
 
   static String displayAppName(String value) {
     final trimmed = value.trim();
@@ -75,22 +84,6 @@ class WindowsInstallerMetadata {
       return trimmed.substring(1);
     }
     return trimmed;
-  }
-
-  /// `AppName_windows_1.3.0_x64_setup`, following the PackFoundry artifact
-  /// naming scheme; [kind] replaces the last part.
-  static String setupBaseName({
-    required String appName,
-    required String version,
-    String kind = 'setup',
-  }) {
-    return [
-      safeFileName(appName),
-      'windows',
-      safeFileName(version),
-      'x64',
-      kind,
-    ].join('_');
   }
 
   /// Replaces characters Windows does not allow in file names.
@@ -196,7 +189,7 @@ class WindowsInstallerFiles {
       'PrivilegesRequiredOverridesAllowed=dialog',
       if (hasLicenseFile) 'LicenseFile=$licenseFileName',
       'OutputDir={#OutputDir}',
-      'OutputBaseFilename=${_directive(metadata.outputBaseName)}',
+      'OutputBaseFilename=${_directive(metadata.setupBaseName)}',
       if (hasIcon) 'SetupIconFile=$iconFileName',
       'UninstallDisplayIcon={app}\\{#MyAppExeName}',
       'Compression=lzma2',
@@ -285,7 +278,7 @@ class WindowsInstallerFiles {
       'CloseApplications=no',
       'RestartIfNeededByRun=no',
       'OutputDir={#OutputDir}',
-      'OutputBaseFilename=${_directive(WindowsInstallerMetadata.setupBaseName(appName: metadata.appName, version: metadata.version, kind: 'portable'))}',
+      'OutputBaseFilename=${_directive(metadata.portableBaseName)}',
       if (hasIcon) 'SetupIconFile=$iconFileName',
       'Compression=lzma2/fast',
       'SolidCompression=yes',
