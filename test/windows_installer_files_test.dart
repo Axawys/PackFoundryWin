@@ -9,6 +9,7 @@ import 'package:pack_foundry/core/models/output_file_name.dart';
 import 'package:pack_foundry/core/services/build_service.dart';
 import 'package:pack_foundry/core/services/windows_icon.dart';
 import 'package:pack_foundry/core/services/windows_installer_files.dart';
+import 'package:pack_foundry/core/services/windows_tools.dart';
 
 void main() {
   late Directory project;
@@ -126,12 +127,19 @@ void main() {
     expect(lines, contains('CreateAppDir=no'));
     expect(lines, contains('PrivilegesRequired=lowest'));
     expect(lines, contains('ShowLanguageDialog=no'));
+    // The app is a child of Setup and must not inherit RedirectionGuard.
+    expect(lines, contains('RedirectionGuard=no'));
     expect(lines, contains('OutputBaseFilename=Hash Checker_2.1.1_portable'));
     expect(lines, contains('SetupIconFile=setup.ico'));
     expect(script, contains(r'DestDir: "{tmp}\app"'));
     expect(script, contains('Flags: waituntilterminated'));
     expect(script, contains('/VERYSILENT'));
     expect(script, isNot(contains('[Icons]')));
+  });
+
+  test('reads the RedirectionGuard state of this process', () {
+    // Tests run in a normal process, where the mitigation is off.
+    expect(WindowsTools().redirectionGuardEnforced(), isFalse);
   });
 
   test('builds the Windows runner once for setup.exe and portable', () {

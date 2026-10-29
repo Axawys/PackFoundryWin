@@ -272,6 +272,9 @@ class WindowsInstallerFiles {
       'PrivilegesRequired=lowest',
       // The language dialog would show up before the silent restart.
       'ShowLanguageDialog=no',
+      // The app is a child of Setup and would inherit RedirectionGuard, which
+      // stops it from following symlinks and junctions users create.
+      'RedirectionGuard=no',
       'DisableWelcomePage=yes',
       'DisableReadyPage=yes',
       'DisableFinishedPage=yes',

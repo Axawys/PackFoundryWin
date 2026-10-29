@@ -525,50 +525,31 @@ class BuildService {
       ),
     );
 
-    var buildOutcome = _ProcessOutcome();
+    final buildOutcome = _ProcessOutcome();
     yield* _runFlutterLogged(workspace.path, const [
       'build',
       'windows',
       '--release',
     ], outcome: buildOutcome);
-    if (buildOutcome.exitCode != 0 &&
-        buildOutcome.output.contains('.plugin_symlinks')) {
-      // CMake found a plugin link without a target. Regenerating the plugin
-      // links and the CMake cache from scratch fixes stale state.
-      yield const BuildEvent.log(
-        BuildLogEntry(
-          title: 'Retrying with fresh plugin links',
-          detail: r'Removing windows\flutter\ephemeral and build\windows.',
-          state: BuildLogState.running,
-        ),
-      );
-      for (final generated in [
-        r'windows\flutter\ephemeral',
-        r'build\windows',
-      ]) {
-        final directory = Directory(_joinPath(workspace.path, generated));
-        if (directory.existsSync()) {
-          await directory.delete(recursive: true);
-        }
-      }
-      buildOutcome = _ProcessOutcome();
-      yield* _runFlutterLogged(workspace.path, const [
-        'build',
-        'windows',
-        '--release',
-      ], outcome: buildOutcome);
-    }
     if (buildOutcome.exitCode != 0) {
       final output = buildOutcome.output.toLowerCase();
-      final symlinkHint =
-          output.contains('symlink support') ||
-              output.contains('developer mode')
-          ? '\nEnable Developer Mode: start ms-settings:developers'
-          : '';
-      yield* failBuild(
-        'Flutter build failed',
-        '${buildOutcome.output}$symlinkHint',
-      );
+      final String hint;
+      if (output.contains('.plugin_symlinks') &&
+          _tools.redirectionGuardEnforced()) {
+        hint =
+            '\nPackFoundry runs with Windows RedirectionGuard, which a '
+            'portable exe made by an older PackFoundry or another Inno Setup '
+            'package turns on for the programs it starts. Flutter and CMake '
+            'inherit it and cannot follow the plugin symlinks. Start '
+            'PackFoundry from its installed copy or from a portable exe '
+            'built by this version.';
+      } else if (output.contains('symlink support') ||
+          output.contains('developer mode')) {
+        hint = '\nEnable Developer Mode: start ms-settings:developers';
+      } else {
+        hint = '';
+      }
+      yield* failBuild('Flutter build failed', '${buildOutcome.output}$hint');
       return;
     }
 

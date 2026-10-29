@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ffi';
 import 'dart:io';
 
 import 'flutter_locator.dart';
@@ -150,6 +151,59 @@ class WindowsTools {
       ]).timeout(const Duration(seconds: 5));
       return result.exitCode == 0 &&
           RegExp(r'0x0*1\b').hasMatch('${result.stdout}');
+    } on Object {
+      return false;
+    }
+  }
+
+  /// Whether Windows' RedirectionGuard mitigation is enforced on this process.
+  /// Child processes inherit it, so flutter and CMake started from here
+  /// cannot follow the plugin symlinks a regular user creates. Inno Setup
+  /// turns it on for itself and the programs it starts.
+  bool redirectionGuardEnforced() {
+    if (!Platform.isWindows) {
+      return false;
+    }
+    try {
+      final kernel32 = DynamicLibrary.open('kernel32.dll');
+      final currentProcess = kernel32
+          .lookupFunction<IntPtr Function(), int Function()>(
+            'GetCurrentProcess',
+            isLeaf: true,
+          );
+      final getPolicy = kernel32
+          .lookupFunction<
+            Int32 Function(IntPtr, Int32, Pointer<Uint32>, IntPtr),
+            int Function(int, int, Pointer<Uint32>, int)
+          >('GetProcessMitigationPolicy', isLeaf: true);
+      final localAlloc = kernel32
+          .lookupFunction<
+            Pointer<Uint32> Function(Uint32, IntPtr),
+            Pointer<Uint32> Function(int, int)
+          >('LocalAlloc', isLeaf: true);
+      final localFree = kernel32
+          .lookupFunction<
+            IntPtr Function(Pointer<Uint32>),
+            int Function(Pointer<Uint32>)
+          >('LocalFree', isLeaf: true);
+      const processRedirectionTrustPolicy = 16;
+      const zeroInitialized = 0x40;
+      final flags = localAlloc(zeroInitialized, 4);
+      if (flags == nullptr) {
+        return false;
+      }
+      try {
+        final ok = getPolicy(
+          currentProcess(),
+          processRedirectionTrustPolicy,
+          flags,
+          4,
+        );
+        // Bit 0 is EnforceRedirectionTrust; older Windows fails the query.
+        return ok != 0 && flags.value & 1 != 0;
+      } finally {
+        localFree(flags);
+      }
     } on Object {
       return false;
     }
