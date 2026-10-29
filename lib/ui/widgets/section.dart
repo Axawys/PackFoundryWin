@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'workspace_card.dart';
+
+/// A titled [WorkspaceCard].
 class Section extends StatelessWidget {
   const Section({
     required this.title,
@@ -19,29 +22,11 @@ class Section extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon),
-                const SizedBox(width: 10),
-                Text(title, style: Theme.of(context).textTheme.titleLarge),
-              ],
-            ),
-            const SizedBox(height: 16),
-            if (expand) Expanded(child: child) else child,
-          ],
-        ),
-      ),
+    return WorkspaceCard(
+      title: title,
+      icon: icon,
+      expand: expand,
+      child: child,
     );
   }
 }
@@ -95,33 +80,39 @@ class _CollapsibleSectionState extends State<CollapsibleSection> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Card(
       elevation: 0,
+      margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: theme.colorScheme.outlineVariant),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           InkWell(
             onTap: _toggle,
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(18),
               child: Row(
                 children: [
-                  Icon(widget.icon),
+                  Icon(widget.icon, size: 22),
                   const SizedBox(width: 10),
                   Text(
                     widget.title,
-                    style: Theme.of(context).textTheme.titleLarge,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                  if (widget.summary != null) ...[
-                    const SizedBox(width: 12),
-                    Flexible(child: widget.summary!),
-                  ],
-                  const Spacer(),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: widget.summary,
+                    ),
+                  ),
                   Icon(_expanded ? Icons.expand_less : Icons.expand_more),
                 ],
               ),
@@ -129,7 +120,7 @@ class _CollapsibleSectionState extends State<CollapsibleSection> {
           ),
           if (_expanded)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
               child: widget.child,
             ),
         ],

@@ -16,6 +16,15 @@ import 'package:pack_foundry/l10n/app_localizations.dart';
 import 'package:pack_foundry/main.dart';
 import 'package:pack_foundry/ui/widgets/build_panel.dart';
 
+/// A workspace tab; the Project workspace has a Build button of its own.
+Finder tab(String label) =>
+    find.descendant(of: find.byType(TabBar), matching: find.text(label));
+
+/// Lock buttons of fields that still follow the developer defaults.
+final lockedFields = find.byTooltip(
+  'From Settings. Click to enter your own value',
+);
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({'hideWelcome': true});
@@ -31,18 +40,20 @@ void main() {
     expect(find.byType(TabBar), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
     expect(find.text('Project'), findsWidgets);
-    expect(find.text('Build'), findsOneWidget);
-    expect(find.text('Application settings'), findsOneWidget);
-    expect(find.text('Installers'), findsOneWidget);
+    expect(tab('Build'), findsOneWidget);
+    expect(find.text('About the app'), findsOneWidget);
+    expect(find.text('Output'), findsOneWidget);
+    expect(lockedFields, findsNWidgets(4));
 
     await tester.tap(find.text('Settings'));
     await tester.pump();
     expect(find.text('Toolchain'), findsOneWidget);
-    await tester.ensureVisible(find.text('Preferences'));
-    expect(find.text('Preferences'), findsOneWidget);
+    expect(find.text('Developer defaults'), findsOneWidget);
+    expect(find.text('Interface'), findsOneWidget);
+    expect(find.text('Output files'), findsOneWidget);
     expect(find.text('Interface theme'), findsOneWidget);
 
-    await tester.tap(find.text('Build'));
+    await tester.tap(tab('Build'));
     await tester.pump();
     // setup.exe is selected out of the box.
     expect(find.text('1 selected target'), findsOneWidget);
@@ -272,7 +283,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    await tester.tap(find.text('Build'));
+    await tester.tap(tab('Build'));
     await tester.pump();
 
     expect(find.text('Build plan'), findsOneWidget);
@@ -409,17 +420,17 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    // Developer fields follow the settings until their checkbox is cleared.
+    // Developer fields follow the settings until their lock is opened.
     for (final label in ['Developer email', 'Developer / publisher']) {
       expect(tester.widget<TextField>(field(label)).readOnly, isTrue);
     }
-    final defaultBoxes = find.text('Default');
-    expect(defaultBoxes, findsNWidgets(4));
+    expect(lockedFields, findsNWidgets(4));
     for (var index = 0; index < 4; index++) {
-      await tester.ensureVisible(defaultBoxes.at(index));
-      await tester.tap(defaultBoxes.at(index));
+      await tester.ensureVisible(lockedFields.first);
+      await tester.tap(lockedFields.first);
       await tester.pump();
     }
+    expect(lockedFields, findsNothing);
 
     await tester.enterText(field('Release tag'), 'v2.3.0');
     await tester.enterText(field('Developer email'), 'dev@example.com');
@@ -494,9 +505,10 @@ void main() {
       'axawys@example.com',
     );
 
-    final emailDefault = find.text('Default').at(1);
-    await tester.ensureVisible(emailDefault);
-    await tester.tap(emailDefault);
+    // Locks follow the field order: publisher, email, homepage, license.
+    final emailLock = lockedFields.at(1);
+    await tester.ensureVisible(emailLock);
+    await tester.tap(emailLock);
     await tester.pump();
     expect(
       tester.widget<TextField>(field('Developer email')).readOnly,
@@ -905,7 +917,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    await tester.tap(find.text('Build'));
+    await tester.tap(tab('Build'));
     await tester.pump();
 
     final screen = Offset.zero & const Size(1280, 800);
@@ -931,10 +943,10 @@ void main() {
     expect(find.text('Настройки'), findsOneWidget);
     expect(find.text('Проект'), findsWidgets);
     expect(find.text('Сборка'), findsOneWidget);
-    expect(find.text('Настройки приложения'), findsOneWidget);
-    expect(find.text('Установщики'), findsOneWidget);
+    expect(find.text('О приложении'), findsOneWidget);
+    expect(find.text('Результат'), findsOneWidget);
 
-    await tester.tap(find.text('Сборка'));
+    await tester.tap(tab('Сборка'));
     await tester.pump();
     expect(
       find.ancestor(

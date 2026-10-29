@@ -5,11 +5,13 @@ import 'package:flutter/services.dart';
 
 import '../../core/models/build_configuration.dart';
 import '../../core/models/build_log_entry.dart';
+import '../../core/models/build_target.dart';
+import '../../core/services/package_file_names.dart';
 import '../../core/services/windows_installer_files.dart';
 import '../../core/services/windows_tools.dart';
 import '../../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
-import 'section.dart';
+import 'workspace_card.dart';
 
 /// Build workspace: the step plan on one side and, on the other, the cmd.exe
 /// commands of the selected step together with the live process log.
@@ -94,113 +96,169 @@ class _BuildPanelState extends State<BuildPanel> {
       builder: (context, constraints) {
         final bounded = constraints.hasBoundedHeight;
         final body = _buildBody(constraints.maxWidth);
-        return Section(
-          title: context.l10n.build,
-          icon: Icons.play_circle_outline,
-          expand: bounded,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildToolbar(context),
-              const SizedBox(height: 16),
-              if (bounded)
-                Expanded(child: body)
-              else
-                SizedBox(height: _fallbackBodyHeight, child: body),
-            ],
-          ),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildSummaryCard(context),
+            const SizedBox(height: 16),
+            if (bounded)
+              Expanded(child: body)
+            else
+              SizedBox(height: _fallbackBodyHeight, child: body),
+          ],
         );
       },
     );
   }
 
-  Widget _buildToolbar(BuildContext context) {
+  /// What is being built: the app, its targets and their files, the overall
+  /// progress, and the build and run actions.
+  Widget _buildSummaryCard(BuildContext context) {
     final l10n = context.l10n;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final muted = theme.textTheme.bodyMedium?.copyWith(
+      color: colors.onSurfaceVariant,
+    );
     final remainingSeconds = _estimatedRemainingSeconds(widget.roadmapSteps);
+    final configuration = widget.configuration;
+    final selected = configuration == null
+        ? const <BuildTarget>[]
+        : [
+            for (final target in configuration.targets)
+              if (target.selected) target,
+          ];
+    final appName = configuration == null
+        ? l10n.noProjectSelected
+        : WindowsInstallerMetadata.displayAppName(configuration.appName);
+    final tag = configuration?.releaseTag.trim() ?? '';
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    final actions = Wrap(
+      spacing: 10,
+      runSpacing: 8,
+      alignment: WrapAlignment.end,
       children: [
-        Wrap(
-          spacing: 10,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            FilledButton.icon(
-              onPressed:
-                  widget.isBuilding ||
-                      widget.isRunning ||
-                      widget.selectedTargets == 0
-                  ? null
-                  : widget.onBuild,
-              icon: Icon(
-                widget.isBuilding
-                    ? Icons.hourglass_top_outlined
-                    : Icons.rocket_launch_outlined,
-              ),
-              label: Text(
-                widget.isBuilding ? l10n.building : l10n.buildInstallers,
-              ),
+        if (widget.canRun)
+          OutlinedButton.icon(
+            onPressed: widget.isBuilding
+                ? null
+                : widget.isRunning
+                ? widget.onStop
+                : widget.onRun,
+            icon: Icon(
+              widget.isRunning
+                  ? Icons.stop_circle_outlined
+                  : Icons.play_arrow_outlined,
             ),
-            if (widget.canRun)
-              OutlinedButton.icon(
-                onPressed: widget.isBuilding
-                    ? null
-                    : widget.isRunning
-                    ? widget.onStop
-                    : widget.onRun,
-                icon: Icon(
-                  widget.isRunning
-                      ? Icons.stop_circle_outlined
-                      : Icons.play_arrow_outlined,
-                ),
-                label: Text(
-                  widget.isRunning ? l10n.stopRunningApp : l10n.runWithoutBuild,
-                ),
-              ),
-            if (widget.isRunning)
-              _BuildStatusChip(
-                icon: Icons.play_circle_outline,
-                label: l10n.runningApp,
-              ),
-            Padding(
-              padding: const EdgeInsets.only(left: 6),
-              child: Text(
-                l10n.selectedTargets(widget.selectedTargets),
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
+            label: Text(
+              widget.isRunning ? l10n.stopRunningApp : l10n.runWithoutBuild,
             ),
-          ],
+          ),
+        FilledButton.icon(
+          onPressed:
+              widget.isBuilding ||
+                  widget.isRunning ||
+                  widget.selectedTargets == 0
+              ? null
+              : widget.onBuild,
+          icon: Icon(
+            widget.isBuilding
+                ? Icons.hourglass_top_outlined
+                : Icons.rocket_launch_outlined,
+          ),
+          label: Text(widget.isBuilding ? l10n.building : l10n.buildInstallers),
         ),
-        if (widget.isBuilding || widget.progress > 0) ...[
-          const SizedBox(height: 12),
+      ],
+    );
+
+    return WorkspaceCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              AppIconPreview(
+                path: configuration?.iconPath,
+                size: 72,
+                fallbackIcon: Icons.rocket_launch_outlined,
+              ),
+              const SizedBox(width: 18),
               Expanded(
-                child: LinearProgressIndicator(
-                  value: widget.progress / 100,
-                  minHeight: 8,
-                  borderRadius: BorderRadius.circular(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: Text(
+                            appName,
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: configuration == null
+                                  ? colors.onSurfaceVariant
+                                  : null,
+                            ),
+                          ),
+                        ),
+                        if (tag.isNotEmpty) SummaryChip(label: tag),
+                        if (widget.isRunning)
+                          _BuildStatusChip(
+                            icon: Icons.play_circle_outline,
+                            label: l10n.runningApp,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      l10n.selectedTargets(widget.selectedTargets),
+                      style: muted,
+                    ),
+                    if (configuration != null && selected.isNotEmpty)
+                      Text(
+                        packageFileNames(configuration, selected).join(', '),
+                        overflow: TextOverflow.ellipsis,
+                        style: muted,
+                      ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 12),
-              _BuildStatusChip(
-                icon: Icons.percent,
-                label: l10n.overallProgressLabel(widget.progress),
-              ),
-              if (widget.isBuilding && remainingSeconds != null) ...[
-                const SizedBox(width: 8),
-                _BuildStatusChip(
-                  icon: Icons.schedule_outlined,
-                  label: l10n.buildRemainingTime(remainingSeconds),
-                ),
-              ],
+              const SizedBox(width: 18),
+              actions,
             ],
           ),
+          if (widget.isBuilding || widget.progress > 0) ...[
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: LinearProgressIndicator(
+                    value: widget.progress / 100,
+                    minHeight: 8,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                _BuildStatusChip(
+                  icon: Icons.percent,
+                  label: l10n.overallProgressLabel(widget.progress),
+                ),
+                if (widget.isBuilding && remainingSeconds != null) ...[
+                  const SizedBox(width: 8),
+                  _BuildStatusChip(
+                    icon: Icons.schedule_outlined,
+                    label: l10n.buildRemainingTime(remainingSeconds),
+                  ),
+                ],
+              ],
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 
@@ -288,15 +346,16 @@ class _Pane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
+        color: theme.cardTheme.color ?? colorScheme.surfaceContainerLow,
         border: Border.all(color: colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(7),
+        borderRadius: BorderRadius.circular(9),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -328,13 +387,13 @@ class _PaneHeader extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
     return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 48),
+      constraints: const BoxConstraints(minHeight: 56),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+        padding: const EdgeInsets.fromLTRB(18, 8, 8, 8),
         child: Row(
           children: [
-            Icon(icon, size: 18, color: colorScheme.onSurfaceVariant),
-            const SizedBox(width: 8),
+            Icon(icon, size: 22),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -344,8 +403,8 @@ class _PaneHeader extends StatelessWidget {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   if (subtitle != null && subtitle!.isNotEmpty)
@@ -1145,8 +1204,7 @@ class _BuildCommandPlan {
         ? configuration.outputPath!.trim()
         : '$project\\build\\pack_foundry';
     final iscc = WindowsTools().findInnoCompiler()?.path ?? 'ISCC.exe';
-    final apkName =
-        '${[WindowsInstallerMetadata.safeFileName(metadata.appName), 'android', WindowsInstallerMetadata.safeFileName(metadata.version), 'universal'].join('_')}.apk';
+    final apkName = apkFileName(metadata);
 
     return switch (stepId) {
       'project' => [

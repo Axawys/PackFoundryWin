@@ -26,17 +26,16 @@ class ToolchainPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final missing = [
-      for (final group in groups)
-        for (final tool in group.tools)
-          if (tool.status != ToolAvailability.installed) tool,
-    ].length;
-    final summaryColor = missing == 0
-        ? context.status.success
-        : context.status.problem;
     final commonGroups = [
       for (final group in groups)
         if (group.category == ToolchainCategory.common) group,
+    ];
+    // Only the common tools are needed for every build, so only they warn
+    // while the section is closed; platform tools show inside it.
+    final missingCommon = [
+      for (final group in commonGroups)
+        for (final tool in group.tools)
+          if (tool.status != ToolAvailability.installed) tool.name,
     ];
     final platformGroups = [
       for (final group in groups)
@@ -48,26 +47,26 @@ class ToolchainPanel extends StatelessWidget {
       icon: Icons.construction_outlined,
       storageKey: 'toolchain',
       initiallyExpanded: initiallyExpanded || installingTarget != null,
-      summary: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            missing == 0 ? Icons.check_circle_outline : Icons.error_outline,
-            size: 18,
-            color: summaryColor,
-          ),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              missing == 0
-                  ? l10n.toolchainAllSet
-                  : l10n.toolchainMissing(missing),
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: summaryColor),
+      summary: missingCommon.isEmpty
+          ? null
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 18,
+                  color: context.status.problem,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    l10n.toolsNotInstalled(missingCommon.join(', ')),
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: context.status.problem),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final columns = switch (constraints.maxWidth) {

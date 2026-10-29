@@ -75,6 +75,56 @@ void main() {
     expect(find.text('Needs common tools'), findsOneWidget);
   });
 
+  testWidgets('warns in the header only about missing common tools', (
+    tester,
+  ) async {
+    ToolchainGroup android(ToolAvailability status) => ToolchainGroup(
+      title: 'APK',
+      subtitle: 'Android',
+      status: status,
+      installTarget: ToolchainInstallTarget.android,
+      tools: [
+        ToolStatus(
+          name: 'Android SDK',
+          command: 'adb',
+          status: status,
+          note: '',
+        ),
+      ],
+    );
+    ToolchainGroup common(ToolAvailability status) => ToolchainGroup(
+      title: 'FLUTTER',
+      subtitle: 'Common',
+      status: status,
+      category: ToolchainCategory.common,
+      installTarget: ToolchainInstallTarget.common,
+      tools: [
+        ToolStatus(
+          name: 'Flutter SDK',
+          command: 'flutter',
+          status: status,
+          note: '',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      buildPanel([
+        common(ToolAvailability.installed),
+        android(ToolAvailability.missing),
+      ]),
+    );
+    expect(find.textContaining('Not installed'), findsNothing);
+
+    await tester.pumpWidget(
+      buildPanel([
+        common(ToolAvailability.missing),
+        android(ToolAvailability.missing),
+      ]),
+    );
+    expect(find.text('Not installed: Flutter SDK'), findsOneWidget);
+  });
+
   testWidgets('shows overall progress and install steps', (tester) async {
     var cancelled = false;
     await tester.pumpWidget(

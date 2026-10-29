@@ -27,14 +27,10 @@ import '../../core/services/toolchain_service.dart';
 import '../../core/services/windows_installer_files.dart';
 import '../../core/services/windows_tools.dart';
 import '../../l10n/app_localizations.dart';
-import '../widgets/app_settings_panel.dart';
 import '../widgets/build_panel.dart';
-import '../widgets/config_presets_panel.dart';
-import '../widgets/developer_defaults_panel.dart';
-import '../widgets/preferences_panel.dart';
-import '../widgets/project_panel.dart';
-import '../widgets/installer_settings_panel.dart';
-import '../widgets/toolchain_panel.dart';
+import '../widgets/project_workspace.dart';
+import '../widgets/settings_workspace.dart';
+import '../widgets/workspace_card.dart';
 import '../widgets/welcome_dialog.dart';
 
 class PackFoundryHomePage extends StatefulWidget {
@@ -2336,6 +2332,8 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       onFileNamePartsChanged: _setFileNameParts,
       onTargetChanged: _setTargetSelection,
       onBuild: _runBuild,
+      onBuildFromProject: _buildFromProject,
+      onOpenBuild: _openBuildWorkspace,
       onRunProject: _runProjectWithoutBuild,
       onStopProject: _stopRunningProject,
       onSendToDevice: _sendApkToDevice,
@@ -2383,6 +2381,17 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       ),
       body: SafeArea(child: content),
     );
+  }
+
+  void _openBuildWorkspace() {
+    _workspaceTabController.animateTo(2);
+  }
+
+  /// The build bar of the Project workspace starts the build and shows its
+  /// progress on the Build workspace.
+  void _buildFromProject() {
+    _openBuildWorkspace();
+    _runBuild();
   }
 
   void _setTargetSelection(BuildTarget target, bool selected) {
@@ -2484,6 +2493,8 @@ class _WorkspaceContent extends StatelessWidget {
     required this.onFileNamePartsChanged,
     required this.onTargetChanged,
     required this.onBuild,
+    required this.onBuildFromProject,
+    required this.onOpenBuild,
     required this.onRunProject,
     required this.onStopProject,
     required this.onSendToDevice,
@@ -2551,6 +2562,8 @@ class _WorkspaceContent extends StatelessWidget {
   final ValueChanged<Set<FileNamePart>> onFileNamePartsChanged;
   final void Function(BuildTarget target, bool selected) onTargetChanged;
   final VoidCallback onBuild;
+  final VoidCallback onBuildFromProject;
+  final VoidCallback onOpenBuild;
   final VoidCallback onRunProject;
   final VoidCallback onStopProject;
   final VoidCallback onSendToDevice;
@@ -2558,16 +2571,31 @@ class _WorkspaceContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final configuration = projectPath == null
+        ? null
+        : BuildConfiguration(
+            appName: appNameController.text,
+            releaseTag: releaseTagController.text,
+            developerEmail: developerEmailController.text,
+            publisherName: publisherNameController.text,
+            homepageUrl: homepageUrlController.text,
+            license: licenseController.text,
+            description: descriptionController.text,
+            projectPath: projectPath!,
+            outputPath: outputPath ?? defaultOutputPath,
+            iconPath: iconPath,
+            windowWidth: int.tryParse(widthController.text),
+            windowHeight: int.tryParse(heightController.text),
+            targets: targets,
+            fileNameParts: fileNameParts,
+          );
     final children = switch (index) {
       0 => [
-        DeveloperDefaultsPanel(
+        SettingsWorkspace(
           publisherNameController: defaultPublisherController,
           developerEmailController: defaultEmailController,
           githubProfileController: githubProfileController,
           licenseController: defaultLicenseController,
-        ),
-        const SizedBox(height: 16),
-        PreferencesPanel(
           themeMode: themeMode,
           localeMode: localeMode,
           onThemeModeChanged: onThemeModeChanged,
@@ -2578,66 +2606,59 @@ class _WorkspaceContent extends StatelessWidget {
           fileNameParts: fileNameParts,
           fileNamePreview: fileNamePreview,
           onFileNamePartsChanged: onFileNamePartsChanged,
-        ),
-        const SizedBox(height: 16),
-        ToolchainPanel(
-          groups: toolGroups,
-          installingTarget: installingToolTarget,
+          toolGroups: toolGroups,
+          installingToolTarget: installingToolTarget,
           onInstallTools: onInstallTools,
           onRemoveTools: onRemoveTools,
           onCancelInstall: onCancelInstall,
         ),
       ],
       1 => [
-        ProjectPanel(
+        ProjectWorkspace(
+          projectPath: projectPath,
           pathController: projectPathController,
           checks: projectChecks,
-          onChooseProject: onChooseProject,
-          onPathSubmitted: onProjectPathSubmitted,
-        ),
-        const SizedBox(height: 16),
-        ConfigPresetsPanel(
           presets: configPresets,
-          activePath: activeConfigPath,
-          isBusy: isBuilding,
+          activeConfigPath: activeConfigPath,
+          iconPath: iconPath,
+          outputPath: outputPath,
+          defaultOutputPath: defaultOutputPath,
+          appNameController: appNameController,
+          releaseTagController: releaseTagController,
+          descriptionController: descriptionController,
+          publisherNameController: publisherNameController,
+          developerEmailController: developerEmailController,
+          homepageUrlController: homepageUrlController,
+          licenseController: licenseController,
+          widthController: widthController,
+          heightController: heightController,
+          defaultFields: defaultFields,
+          defaults: developerDefaults,
+          targets: targets,
+          configuration: configuration,
+          isBuilding: isBuilding,
+          progress: progress,
           isRunning: isRunningProject,
           canRun: canRunProject,
           canSendToDevice: canSendToDevice,
           isSendingToDevice: isSendingToDevice,
           sendToDeviceStatus: sendToDeviceStatus,
+          onChooseProject: onChooseProject,
+          onPathSubmitted: onProjectPathSubmitted,
           onAddConfig: onAddConfigPreset,
           onSaveCurrentConfig: onSaveCurrentConfig,
           onApplyPreset: onApplyConfigPreset,
           onRemovePreset: onRemoveConfigPreset,
+          onChooseIcon: onChooseIcon,
+          onChooseOutput: onChooseOutput,
+          onUseDefaultChanged: onUseDefaultChanged,
+          onTargetChanged: onTargetChanged,
+          onBuild: onBuildFromProject,
+          onOpenBuild: onOpenBuild,
           onRun: onRunProject,
           onStop: onStopProject,
           onSendToDevice: onSendToDevice,
           onCancelSendToDevice: onCancelSendToDevice,
-        ),
-        const SizedBox(height: 16),
-        AppSettingsPanel(
-          widthController: widthController,
-          heightController: heightController,
-          releaseTagController: releaseTagController,
-          developerEmailController: developerEmailController,
-          publisherNameController: publisherNameController,
-          homepageUrlController: homepageUrlController,
-          licenseController: licenseController,
-          descriptionController: descriptionController,
-          defaultFields: defaultFields,
-          defaults: developerDefaults,
-          onUseDefaultChanged: onUseDefaultChanged,
-          iconPath: iconPath,
-          onChooseIcon: onChooseIcon,
-        ),
-        const SizedBox(height: 16),
-        InstallerSettingsPanel(
-          appNameController: appNameController,
-          outputPath: outputPath,
-          defaultOutputPath: defaultOutputPath,
-          targets: targets,
-          onChooseOutput: onChooseOutput,
-          onChanged: onTargetChanged,
         ),
       ],
       _ => [
@@ -2649,24 +2670,7 @@ class _WorkspaceContent extends StatelessWidget {
           progress: progress,
           roadmapSteps: roadmapSteps,
           log: log,
-          configuration: projectPath == null
-              ? null
-              : BuildConfiguration(
-                  appName: appNameController.text,
-                  releaseTag: releaseTagController.text,
-                  developerEmail: developerEmailController.text,
-                  publisherName: publisherNameController.text,
-                  homepageUrl: homepageUrlController.text,
-                  license: licenseController.text,
-                  description: descriptionController.text,
-                  projectPath: projectPath!,
-                  outputPath: outputPath ?? defaultOutputPath,
-                  iconPath: iconPath,
-                  windowWidth: int.tryParse(widthController.text),
-                  windowHeight: int.tryParse(heightController.text),
-                  targets: targets,
-                  fileNameParts: fileNameParts,
-                ),
+          configuration: configuration,
           onBuild: onBuild,
           onRun: onRunProject,
           onStop: onStopProject,
@@ -2674,32 +2678,32 @@ class _WorkspaceContent extends StatelessWidget {
       ],
     };
 
-    if (index == 2) {
-      // The build workspace fills the window so the plan, commands and log
-      // are visible together; it only scrolls when the window is very short.
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          const minHeight = 560.0;
-          final panel = Padding(
-            padding: const EdgeInsets.all(24),
-            child: children.single,
-          );
-          if (constraints.maxHeight >= minHeight) {
-            return panel;
-          }
-          return SingleChildScrollView(
-            child: SizedBox(height: minHeight, child: panel),
-          );
-        },
-      );
+    if (index != 2) {
+      // Settings and Project lay out and scroll their own pages.
+      return children.single;
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: children,
-      ),
+    // The build workspace fills the window so the plan, commands and log are
+    // visible together; it only scrolls when the window is very short.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const minHeight = 640.0;
+        final panel = Padding(
+          padding: const EdgeInsets.all(24),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: workspaceMaxWidth),
+              child: children.single,
+            ),
+          ),
+        );
+        if (constraints.maxHeight >= minHeight) {
+          return panel;
+        }
+        return SingleChildScrollView(
+          child: SizedBox(height: minHeight, child: panel),
+        );
+      },
     );
   }
 }

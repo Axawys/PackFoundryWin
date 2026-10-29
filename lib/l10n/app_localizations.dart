@@ -20,8 +20,6 @@ class AppLocalizations {
   bool get _isRu => locale.languageCode == 'ru';
 
   String get settings => _isRu ? 'Настройки' : 'Settings';
-  String get chooseExportFolder =>
-      _isRu ? 'Выбрать папку экспорта' : 'Choose export folder';
   String get welcomeTitle =>
       _isRu ? 'Добро пожаловать в PackFoundry' : 'Welcome to PackFoundry';
   String get welcomeIntro => _isRu
@@ -36,7 +34,6 @@ class AppLocalizations {
   String get welcomeFeatureBuild => _isRu
       ? 'Запускайте сборку, смотрите прогресс, логи и понятные сообщения об ошибках.'
       : 'Run builds with visible progress, logs and clear failure messages.';
-  String get preferences => _isRu ? 'Установки' : 'Preferences';
   String get themeChoice => _isRu ? 'Тема интерфейса' : 'Interface theme';
   String get themeSystem => _isRu ? 'Системная' : 'System';
   String get themeLight => _isRu ? 'Светлая' : 'Light';
@@ -108,16 +105,9 @@ class AppLocalizations {
   }
 
   String get configPresets => _isRu ? 'Конфиги' : 'Configs';
-  String get configPresetsHint => _isRu
-      ? 'Конфиги остаются закреплёнными, пока их файлы существуют на диске. Нажмите на конфиг, чтобы применить его.'
-      : 'Configs stay pinned as long as their files exist on disk. Click a config to apply it.';
-  String get noConfigPresets => _isRu
-      ? 'Пока нет закреплённых конфигов. Добавьте файл конфига или сохраните текущие настройки.'
-      : 'No pinned configs yet. Add a config file or save the current settings.';
   String get addConfig => _isRu ? 'Добавить конфиг' : 'Add config';
   String get saveCurrentConfig =>
       _isRu ? 'Сохранить текущий' : 'Save current settings';
-  String get activeConfig => _isRu ? 'Активен' : 'Active';
   String get configPresetBroken =>
       _isRu ? 'Файл не читается' : 'File cannot be read';
   String get removeConfigPreset =>
@@ -129,12 +119,8 @@ class AppLocalizations {
       ? 'Этот конфиг уже в списке.'
       : 'This config is already in the list.';
 
-  String get applicationSettings =>
-      _isRu ? 'Настройки приложения' : 'Application settings';
   String get applicationName =>
       _isRu ? 'Название приложения' : 'Application name';
-  String get releaseMetadata =>
-      _isRu ? 'Метаданные релиза' : 'Release metadata';
   String get releaseTag => _isRu ? 'Тег релиза' : 'Release tag';
   String get developerEmail => _isRu ? 'Почта разработчика' : 'Developer email';
   String get publisherName =>
@@ -169,12 +155,11 @@ class AppLocalizations {
   String get developerDefaults =>
       _isRu ? 'Разработчик по умолчанию' : 'Developer defaults';
   String get developerDefaultsHint => _isRu
-      ? 'Подставляются в раздел «Проект», пока там отмечено «По умолчанию». '
+      ? 'Подставляются в поля с замком на вкладке «Проект». '
             'Сайт проекта = профиль GitHub + имя папки проекта.'
-      : 'Used in the Project workspace while "Default" is ticked there. '
+      : 'Used by the locked fields of the Project workspace. '
             'Project homepage = GitHub profile + project folder name.';
   String get githubProfile => _isRu ? 'Профиль GitHub' : 'GitHub profile';
-  String get useDefault => _isRu ? 'По умолчанию' : 'Default';
   String get defaultNotSet =>
       _isRu ? 'Не задано в настройках' : 'Not set in settings';
   String get builtInOutputHint => _isRu
@@ -293,11 +278,39 @@ class AppLocalizations {
       ? 'Нужна Android Gradle toolchain для сборки APK/AAB.'
       : 'Required by the Android Gradle toolchain for APK/AAB builds.';
 
-  String get installers => _isRu ? 'Установщики' : 'Installers';
+  String get interfaceSection => _isRu ? 'Интерфейс' : 'Interface';
+  String get outputFilesSection => _isRu ? 'Выходные файлы' : 'Output files';
+  String get developerNotSet =>
+      _isRu ? 'Разработчик не задан' : 'No developer set';
+  String get githubProfileNotSet =>
+      _isRu ? 'Профиль GitHub не задан' : 'No GitHub profile';
+  String get aboutApp => _isRu ? 'О приложении' : 'About the app';
+  String get developerStep => _isRu ? 'Разработчик' : 'Developer';
+  String get outputStep => _isRu ? 'Результат' : 'Output';
+  String get changeIcon => _isRu ? 'Сменить иконку' : 'Change icon';
+  String get noActiveConfig => _isRu ? 'Без конфига' : 'No config';
+  String get exportFolder => _isRu ? 'Папка экспорта' : 'Export folder';
+  String get lockHint => _isRu
+      ? 'Поля с замком берут значения из настроек. Нажмите на замок, чтобы ввести своё.'
+      : 'Locked fields use the values from Settings. Click the lock to enter your own.';
+  String get lockedFieldHint => _isRu
+      ? 'Из настроек. Нажмите, чтобы ввести своё значение'
+      : 'From Settings. Click to enter your own value';
+  String get customFieldHint => _isRu
+      ? 'Своё значение. Нажмите, чтобы взять из настроек'
+      : 'Custom value. Click to use the value from Settings';
+  String get chooseProjectToBuild => _isRu
+      ? 'Выберите папку проекта, чтобы собрать'
+      : 'Choose a project folder to build';
+  String get selectTargetToBuild =>
+      _isRu ? 'Выберите хотя бы одну цель' : 'Select at least one target';
+  String get readyToBuild => _isRu ? 'Готово к сборке' : 'Ready';
+  String buildingProgress(int percent) =>
+      _isRu ? 'Идёт сборка… $percent%' : 'Building… $percent%';
+  String get openBuild => _isRu ? 'Открыть сборку' : 'Open build';
   String get toolchain => _isRu ? 'Инструменты' : 'Toolchain';
-  String get toolchainAllSet => _isRu ? 'Всё установлено' : 'All set';
-  String toolchainMissing(int count) =>
-      _isRu ? 'Не хватает: $count' : '$count not installed';
+  String toolsNotInstalled(String names) =>
+      _isRu ? 'Не установлено: $names' : 'Not installed: $names';
   String get build => _isRu ? 'Сборка' : 'Build';
   String selectedTargets(int count) {
     if (!_isRu) {

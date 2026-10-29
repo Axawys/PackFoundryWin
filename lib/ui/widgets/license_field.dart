@@ -7,14 +7,16 @@ class LicenseField extends StatelessWidget {
   const LicenseField({
     required this.controller,
     required this.label,
-    required this.width,
+    this.width,
     this.enabled = true,
     super.key,
   });
 
   final TextEditingController controller;
   final String label;
-  final double width;
+
+  /// Null makes the field as wide as its parent.
+  final double? width;
   final bool enabled;
 
   @override
@@ -26,6 +28,15 @@ class LicenseField extends StatelessWidget {
     return DropdownMenu<String>(
       controller: controller,
       width: width,
+      expandedInsets: width == null ? EdgeInsets.zero : null,
+      // The arrow button would make the field taller than the text fields
+      // around it.
+      inputDecorationTheme: Theme.of(context).inputDecorationTheme.copyWith(
+        suffixIconConstraints: const BoxConstraints(
+          minWidth: 40,
+          maxHeight: 40,
+        ),
+      ),
       enabled: enabled,
       requestFocusOnTap: true,
       menuHeight: 360,
