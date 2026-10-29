@@ -57,4 +57,28 @@ class DeveloperDefaults {
         ? 'https://$value'
         : 'https://github.com/$value';
   }
+
+  /// The GitHub user name of [githubProfile], or null when the profile is not
+  /// a github.com account.
+  String? get githubUser {
+    final uri = Uri.tryParse(profileUrl ?? '');
+    if (uri == null || uri.host.toLowerCase() != 'github.com') {
+      return null;
+    }
+    final segments = uri.pathSegments.where((part) => part.isNotEmpty);
+    if (segments.isEmpty) {
+      return null;
+    }
+    final user = segments.first;
+    // GitHub user names are letters, digits and single dashes.
+    return RegExp(r'^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$').hasMatch(user)
+        ? user
+        : null;
+  }
+
+  /// The avatar GitHub serves for [githubUser], [size] pixels square.
+  String? avatarUrl({int size = 192}) {
+    final user = githubUser;
+    return user == null ? null : 'https://github.com/$user.png?size=$size';
+  }
 }

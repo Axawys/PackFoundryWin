@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/models/developer_defaults.dart';
@@ -126,9 +128,10 @@ class _DeveloperCard extends StatelessWidget {
           final name = w.publisherNameController.text.trim();
           final email = w.developerEmailController.text.trim();
           final license = w.licenseController.text.trim();
-          final profile = DeveloperDefaults(
+          final defaults = DeveloperDefaults(
             githubProfile: w.githubProfileController.text,
-          ).profileUrl;
+          );
+          final profile = defaults.profileUrl;
 
           final summary = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -167,7 +170,7 @@ class _DeveloperCard extends StatelessWidget {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _Avatar(name: name),
+              _Avatar(name: name, imageUrl: defaults.avatarUrl()),
               const SizedBox(width: 22),
               Expanded(child: summary),
             ],
@@ -178,27 +181,65 @@ class _DeveloperCard extends StatelessWidget {
   }
 }
 
-class _Avatar extends StatelessWidget {
-  const _Avatar({required this.name});
+/// The GitHub avatar of the profile, or the initials of [name] while it
+/// loads, when there is no GitHub profile or no connection.
+class _Avatar extends StatefulWidget {
+  const _Avatar({required this.name, required this.imageUrl});
+
+  static const size = 96.0;
 
   final String name;
+  final String? imageUrl;
+
+  @override
+  State<_Avatar> createState() => _AvatarState();
+}
+
+class _AvatarState extends State<_Avatar> {
+  /// Follows [_Avatar.imageUrl] with a delay, so typing a profile name does
+  /// not request an image for every letter.
+  String? _shownUrl;
+  Timer? _debounce;
+
+  @override
+  void initState() {
+    super.initState();
+    _shownUrl = widget.imageUrl;
+  }
+
+  @override
+  void didUpdateWidget(_Avatar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.imageUrl == oldWidget.imageUrl) {
+      return;
+    }
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 700), () {
+      if (mounted) {
+        setState(() => _shownUrl = widget.imageUrl);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final initials = name
+    final initials = widget.name
         .split(RegExp(r'\s+'))
         .where((word) => word.isNotEmpty)
         .take(2)
         .map((word) => word.characters.first.toUpperCase())
         .join();
-    return Container(
-      width: 96,
-      height: 96,
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(48),
-      ),
+    final placeholder = Container(
+      width: _Avatar.size,
+      height: _Avatar.size,
+      color: theme.colorScheme.surfaceContainerHighest,
       alignment: Alignment.center,
       child: initials.isEmpty
           ? Icon(
@@ -211,6 +252,23 @@ class _Avatar extends StatelessWidget {
               style: theme.textTheme.headlineMedium?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
+            ),
+    );
+    final url = _shownUrl;
+
+    return ClipOval(
+      child: url == null
+          ? placeholder
+          : Image.network(
+              url,
+              key: ValueKey(url),
+              width: _Avatar.size,
+              height: _Avatar.size,
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.medium,
+              frameBuilder: (context, child, frame, wasSynchronouslyLoaded) =>
+                  frame == null ? placeholder : child,
+              errorBuilder: (context, error, stackTrace) => placeholder,
             ),
     );
   }

@@ -28,6 +28,33 @@ void main() {
     );
   });
 
+  test('finds the GitHub user for the avatar', () {
+    expect(
+      const DeveloperDefaults(
+        githubProfile: 'https://github.com/Axawys/',
+      ).avatarUrl(),
+      'https://github.com/Axawys.png?size=192',
+    );
+    expect(
+      const DeveloperDefaults(githubProfile: '@Axawys').githubUser,
+      'Axawys',
+    );
+    expect(
+      const DeveloperDefaults(
+        githubProfile: 'github.com/Axawys/PackFoundryWin',
+      ).githubUser,
+      'Axawys',
+    );
+    // Not a GitHub account, so there is no avatar to load.
+    expect(
+      const DeveloperDefaults(
+        githubProfile: 'https://gitlab.com/Axawys',
+      ).avatarUrl(),
+      isNull,
+    );
+    expect(const DeveloperDefaults().avatarUrl(), isNull);
+  });
+
   test('has no homepage without a profile or a project', () {
     expect(const DeveloperDefaults().homepageFor(r'C:\app'), isNull);
     expect(
