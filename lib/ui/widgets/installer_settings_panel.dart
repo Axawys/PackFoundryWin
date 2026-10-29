@@ -92,6 +92,9 @@ class InstallerSettingsPanel extends StatelessWidget {
                               )
                             : target.artifact == BuildTarget.buildScript
                             ? l10n.buildScriptTargetHint
+                            : target.artifact == BuildTarget.portable &&
+                                  target.status == TargetStatus.ready
+                            ? l10n.portableTargetHint
                             : l10n.targetStatusLabel(target.status.name),
                         onChanged: (selected) => onChanged(target, selected),
                       ),
@@ -109,6 +112,7 @@ class InstallerSettingsPanel extends StatelessWidget {
     return switch (target.artifact) {
       BuildTarget.apk => Icons.android_outlined,
       BuildTarget.buildScript => Icons.terminal_outlined,
+      BuildTarget.portable => Icons.usb_outlined,
       _ => Icons.install_desktop_outlined,
     };
   }

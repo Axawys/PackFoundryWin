@@ -101,6 +101,7 @@ class ProjectConfig {
   static String packageTypeForTarget(String platform, String artifact) {
     return switch ((platform, artifact)) {
       ('Windows', BuildTarget.setupExe) => 'exe',
+      ('Windows', BuildTarget.portable) => 'portable',
       ('Windows', BuildTarget.buildScript) => 'cmd',
       ('Android', BuildTarget.apk) => 'apk',
       _ => '${platform.toLowerCase()}:${artifact.toLowerCase()}',

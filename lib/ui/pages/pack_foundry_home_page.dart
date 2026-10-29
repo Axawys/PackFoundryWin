@@ -159,6 +159,11 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
     ),
     BuildTarget(
       platform: 'Windows',
+      artifact: BuildTarget.portable,
+      status: TargetStatus.ready,
+    ),
+    BuildTarget(
+      platform: 'Windows',
       artifact: BuildTarget.buildScript,
       status: TargetStatus.ready,
     ),

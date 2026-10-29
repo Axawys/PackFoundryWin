@@ -272,7 +272,6 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-
     await tester.tap(find.text('Build'));
     await tester.pump();
 

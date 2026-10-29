@@ -19,6 +19,7 @@ class BuildService {
   static const _stepBuildScript = 'build-script';
   static const _stepWindowsBuild = 'windows-build';
   static const _stepInstaller = 'installer';
+  static const _stepPortable = 'portable';
   static const _stepAndroidBuild = 'android-build';
   static const _stepApkExport = 'apk-export';
   static const _stepSummary = 'summary';
@@ -81,6 +82,7 @@ class BuildService {
       (target) => target.platform == platform && target.artifact == artifact,
     );
     final hasSetup = has('Windows', BuildTarget.setupExe);
+    final hasPortable = has('Windows', BuildTarget.portable);
     final hasScript = has('Windows', BuildTarget.buildScript);
     final hasApk = has('Android', BuildTarget.apk);
 
@@ -99,11 +101,11 @@ class BuildService {
       );
     }
 
-    if (!hasSetup && !hasScript && !hasApk) {
+    if (!hasSetup && !hasPortable && !hasScript && !hasApk) {
       yield const BuildEvent.log(
         BuildLogEntry(
           title: 'No supported targets selected',
-          detail: 'Select setup.exe, build_setup.cmd or APK.',
+          detail: 'Select setup.exe, portable, build_setup.cmd or APK.',
           state: BuildLogState.warning,
         ),
       );
@@ -156,7 +158,7 @@ class BuildService {
         yield const BuildEvent.progress(10);
       }
 
-      if (hasSetup || hasApk) {
+      if (hasSetup || hasPortable || hasApk) {
         yield const BuildEvent.roadmapUpdate(
           BuildRoadmapUpdate(
             id: _stepWorkspace,
@@ -200,12 +202,14 @@ class BuildService {
         );
         yield const BuildEvent.progress(15);
 
-        if (hasSetup) {
-          yield* _buildWindowsSetup(
+        if (hasSetup || hasPortable) {
+          yield* _buildWindowsPackages(
             configuration: configuration,
             buildWorkspace: buildWorkspaceInfo,
             outputDirectory: outputDirectory,
             failures: failures,
+            setup: hasSetup,
+            portable: hasPortable,
           );
         }
 
@@ -295,12 +299,14 @@ class BuildService {
       (target) => target.platform == platform && target.artifact == artifact,
     );
     final hasSetup = has('Windows', BuildTarget.setupExe);
+    final hasPortable = has('Windows', BuildTarget.portable);
     final hasScript = has('Windows', BuildTarget.buildScript);
     final hasApk = has('Android', BuildTarget.apk);
-    if (!hasSetup && !hasScript && !hasApk) {
+    if (!hasSetup && !hasPortable && !hasScript && !hasApk) {
       return const [];
     }
-    final hasWorkspace = hasSetup || hasApk;
+    final hasWindowsBuild = hasSetup || hasPortable;
+    final hasWorkspace = hasWindowsBuild || hasApk;
     var number = 1;
 
     BuildRoadmapStep step({
@@ -342,20 +348,28 @@ class BuildService {
               'Copy the project and apply settings without touching sources.',
           estimatedSeconds: 8,
         ),
-      if (hasSetup) ...[
+      if (hasWindowsBuild)
         step(
           id: _stepWindowsBuild,
           title: 'Flutter build',
           description: 'Compile the Windows release runner.',
           estimatedSeconds: 150,
         ),
+      if (hasSetup)
         step(
           id: _stepInstaller,
           title: 'SETUP.EXE',
           description: 'Generate setup.iss and compile it with Inno Setup.',
           estimatedSeconds: 25,
         ),
-      ],
+      if (hasPortable)
+        step(
+          id: _stepPortable,
+          title: 'PORTABLE',
+          description:
+              'Pack the app into one exe that runs without installing.',
+          estimatedSeconds: 25,
+        ),
       if (hasApk) ...[
         step(
           id: _stepAndroidBuild,
@@ -451,18 +465,36 @@ class BuildService {
     );
   }
 
-  Stream<BuildEvent> _buildWindowsSetup({
+  /// Builds the Windows runner once and packs it into the selected Inno
+  /// Setup packages.
+  Stream<BuildEvent> _buildWindowsPackages({
     required BuildConfiguration configuration,
     required _BuildWorkspace buildWorkspace,
     required Directory outputDirectory,
     required List<String> failures,
+    required bool setup,
+    required bool portable,
   }) async* {
     final workspace = buildWorkspace.workspace;
-    Stream<BuildEvent> fail(String stepId, String title, String detail) async* {
-      failures.add('setup.exe');
+    final packages = [
+      if (setup) _InnoPackage.setup,
+      if (portable) _InnoPackage.portable,
+    ];
+    Stream<BuildEvent> failBuild(String title, String detail) async* {
+      for (final package in packages) {
+        failures.add(package.label);
+        yield BuildEvent.roadmapUpdate(
+          BuildRoadmapUpdate(
+            id: package.stepId,
+            state: BuildRoadmapStepState.skipped,
+            progress: 100,
+            detail: 'The Windows build failed.',
+          ),
+        );
+      }
       yield BuildEvent.roadmapUpdate(
         BuildRoadmapUpdate(
-          id: stepId,
+          id: _stepWindowsBuild,
           state: BuildRoadmapStepState.warning,
           progress: 100,
           detail: detail,
@@ -503,8 +535,7 @@ class BuildService {
       final symlinkHint = buildOutcome.output.toLowerCase().contains('symlink')
           ? '\nEnable Developer Mode: start ms-settings:developers'
           : '';
-      yield* fail(
-        _stepWindowsBuild,
+      yield* failBuild(
         'Flutter build failed',
         '${buildOutcome.output}$symlinkHint',
       );
@@ -517,8 +548,7 @@ class BuildService {
     final metadata = WindowsInstallerMetadata.fromConfiguration(configuration);
     final exeName = _findRunnerExecutable(releaseDirectory, metadata.exeName);
     if (exeName == null) {
-      yield* fail(
-        _stepWindowsBuild,
+      yield* failBuild(
         'Windows runner not found',
         'Expected an .exe in ${releaseDirectory.path}.',
       );
@@ -534,19 +564,66 @@ class BuildService {
         detail: _joinPath(releaseDirectory.path, exeName),
       ),
     );
-    yield const BuildEvent.roadmapUpdate(
+
+    for (final package in packages) {
+      yield* _compileInnoPackage(
+        package: package,
+        configuration: configuration,
+        metadata: metadata,
+        buildWorkspace: buildWorkspace,
+        releaseDirectory: releaseDirectory,
+        exeName: exeName,
+        outputDirectory: outputDirectory,
+        failures: failures,
+      );
+    }
+  }
+
+  Stream<BuildEvent> _compileInnoPackage({
+    required _InnoPackage package,
+    required BuildConfiguration configuration,
+    required WindowsInstallerMetadata metadata,
+    required _BuildWorkspace buildWorkspace,
+    required Directory releaseDirectory,
+    required String exeName,
+    required Directory outputDirectory,
+    required List<String> failures,
+  }) async* {
+    final stepId = package.stepId;
+    Stream<BuildEvent> fail(String title, String detail) async* {
+      failures.add(package.label);
+      yield BuildEvent.roadmapUpdate(
+        BuildRoadmapUpdate(
+          id: stepId,
+          state: BuildRoadmapStepState.warning,
+          progress: 100,
+          detail: detail,
+        ),
+      );
+      yield BuildEvent.log(
+        BuildLogEntry(
+          title: title,
+          detail: detail,
+          state: BuildLogState.warning,
+        ),
+      );
+    }
+
+    final issName = package == _InnoPackage.portable
+        ? WindowsInstallerFiles.portableIssFileName
+        : WindowsInstallerFiles.issFileName;
+    yield BuildEvent.roadmapUpdate(
       BuildRoadmapUpdate(
-        id: _stepInstaller,
+        id: stepId,
         state: BuildRoadmapStepState.running,
         progress: 10,
-        detail: 'Generating setup.iss.',
+        detail: 'Generating $issName.',
       ),
     );
 
     final iscc = _tools.findInnoCompiler();
     if (iscc == null) {
       yield* fail(
-        _stepInstaller,
         'Inno Setup was not found',
         'ISCC.exe is not in PATH or Program Files. Install Inno Setup 6: '
             '${WindowsTools.innoSetupWinget}',
@@ -563,30 +640,40 @@ class BuildService {
     );
     final workspaceIcon = buildWorkspace.icon;
     final hasIcon = workspaceIcon != null && workspaceIcon.existsSync();
-    if (hasIcon) {
+    if (hasIcon && !iconFile.existsSync()) {
       await workspaceIcon.copy(iconFile.path);
     }
-    final hasLicense = await _copyLicenseFile(
-      projectPath: configuration.projectPath,
-      destination: File(
-        _joinPath(innoDirectory.path, WindowsInstallerFiles.licenseFileName),
+    final issFile = File(_joinPath(innoDirectory.path, issName));
+    if (package == _InnoPackage.portable) {
+      await _writeIss(
+        issFile,
+        _installerFiles.portableScript(metadata, hasIcon: hasIcon),
+      );
+    } else {
+      final hasLicense = await _copyLicenseFile(
+        projectPath: configuration.projectPath,
+        destination: File(
+          _joinPath(innoDirectory.path, WindowsInstallerFiles.licenseFileName),
+        ),
+      );
+      await _writeInnoScript(
+        issFile,
+        metadata,
+        hasIcon: hasIcon,
+        hasLicenseFile: hasLicense,
+      );
+    }
+
+    final packageFile = File(
+      _joinPath(
+        outputDirectory.path,
+        package == _InnoPackage.portable
+            ? metadata.portableFileName
+            : metadata.setupFileName,
       ),
     );
-    final issFile = File(
-      _joinPath(innoDirectory.path, WindowsInstallerFiles.issFileName),
-    );
-    await _writeInnoScript(
-      issFile,
-      metadata,
-      hasIcon: hasIcon,
-      hasLicenseFile: hasLicense,
-    );
-
-    final setupFile = File(
-      _joinPath(outputDirectory.path, metadata.setupFileName),
-    );
-    if (setupFile.existsSync()) {
-      await setupFile.delete();
+    if (packageFile.existsSync()) {
+      await packageFile.delete();
     }
     final arguments = [
       '/Qp',
@@ -597,14 +684,16 @@ class BuildService {
     ];
     yield BuildEvent.log(
       BuildLogEntry(
-        title: 'Compiling installer with Inno Setup',
+        title: package == _InnoPackage.portable
+            ? 'Packing portable app with Inno Setup'
+            : 'Compiling installer with Inno Setup',
         detail: '"${iscc.path}" ${arguments.join(' ')}',
         state: BuildLogState.running,
       ),
     );
-    yield const BuildEvent.roadmapUpdate(
+    yield BuildEvent.roadmapUpdate(
       BuildRoadmapUpdate(
-        id: _stepInstaller,
+        id: stepId,
         state: BuildRoadmapStepState.running,
         progress: 40,
         detail: 'Running ISCC.exe.',
@@ -619,28 +708,24 @@ class BuildService {
       workingDirectory: innoDirectory.path,
       outcome: isccOutcome,
     );
-    if (isccOutcome.exitCode != 0 || !setupFile.existsSync()) {
-      yield* fail(
-        _stepInstaller,
-        'Inno Setup compilation failed',
-        isccOutcome.output,
-      );
+    if (isccOutcome.exitCode != 0 || !packageFile.existsSync()) {
+      yield* fail('Inno Setup compilation failed', isccOutcome.output);
       return;
     }
 
     yield const BuildEvent.progress(58);
     yield BuildEvent.roadmapUpdate(
       BuildRoadmapUpdate(
-        id: _stepInstaller,
+        id: stepId,
         state: BuildRoadmapStepState.success,
         progress: 100,
-        detail: setupFile.path,
+        detail: packageFile.path,
       ),
     );
     yield BuildEvent.log(
       BuildLogEntry(
-        title: 'Created setup.exe',
-        detail: setupFile.path,
+        title: 'Created ${package.label}',
+        detail: packageFile.path,
         state: BuildLogState.success,
       ),
     );
@@ -770,21 +855,21 @@ class BuildService {
     WindowsInstallerMetadata metadata, {
     required bool hasIcon,
     required bool hasLicenseFile,
-  }) async {
+  }) {
+    return _writeIss(
+      file,
+      _installerFiles.innoSetupScript(
+        metadata,
+        hasIcon: hasIcon,
+        hasLicenseFile: hasLicenseFile,
+      ),
+    );
+  }
+
+  Future<void> _writeIss(File file, String script) async {
     // Inno Setup reads a script as UTF-8 only when it starts with a BOM, which
     // non-Latin app names need.
-    await file.writeAsBytes([
-      0xEF,
-      0xBB,
-      0xBF,
-      ...utf8.encode(
-        _installerFiles.innoSetupScript(
-          metadata,
-          hasIcon: hasIcon,
-          hasLicenseFile: hasLicenseFile,
-        ),
-      ),
-    ]);
+    await file.writeAsBytes([0xEF, 0xBB, 0xBF, ...utf8.encode(script)]);
   }
 
   /// Writes the installer icon: the icon picked in PackFoundry converted to
@@ -1344,6 +1429,17 @@ class BuildService {
         : normalized;
     return trimmed.substring(trimmed.lastIndexOf('/') + 1);
   }
+}
+
+/// Inno Setup packages built from the same Windows runner.
+enum _InnoPackage {
+  setup('setup.exe', BuildService._stepInstaller),
+  portable('portable', BuildService._stepPortable);
+
+  const _InnoPackage(this.label, this.stepId);
+
+  final String label;
+  final String stepId;
 }
 
 class _ProcessOutcome {

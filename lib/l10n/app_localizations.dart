@@ -241,6 +241,9 @@ class AppLocalizations {
   String get buildScriptTargetHint => _isRu
       ? 'Скрипт для сборки setup.exe на любом Windows-компьютере'
       : 'Script that builds setup.exe on any Windows machine';
+  String get portableTargetHint => _isRu
+      ? 'Один exe: запускается сразу, без установки'
+      : 'One exe that runs right away, no install';
 
   String get windowsBuildGroupSubtitle => _isRu
       ? 'Сборка Windows-приложения и установщика setup.exe через Inno Setup на этом компьютере.'
@@ -445,6 +448,7 @@ class AppLocalizations {
       'build-script' => _isRu ? 'Скрипт сборки' : 'Build script',
       'windows-build' => 'Flutter build',
       'installer' => 'SETUP.EXE',
+      'portable' => 'PORTABLE',
       'android-build' => _isRu ? 'APK сборка' : 'APK build',
       'apk-export' => _isRu ? 'APK экспорт' : 'APK export',
       'summary' => _isRu ? 'Экспорт' : 'Export',
@@ -475,6 +479,10 @@ class AppLocalizations {
         _isRu
             ? 'Генерация setup.iss и компиляция через Inno Setup.'
             : 'Generate setup.iss and compile it with Inno Setup.',
+      'portable' =>
+        _isRu
+            ? 'Упаковка приложения в один exe, который запускается без установки.'
+            : 'Pack the app into one exe that runs without installing.',
       'android-build' =>
         _isRu
             ? 'Сборка Android release APK через Flutter и Gradle.'
@@ -512,6 +520,8 @@ class AppLocalizations {
       'Running flutter build windows --release.' =>
         'Запускаем flutter build windows --release.',
       'Generating setup.iss.' => 'Генерируем setup.iss.',
+      'Generating portable.iss.' => 'Генерируем portable.iss.',
+      'The Windows build failed.' => 'Сборка Windows не удалась.',
       'Running ISCC.exe.' => 'Запускаем ISCC.exe.',
       'Running flutter build apk --release.' =>
         'Запускаем flutter build apk --release.',
@@ -557,6 +567,10 @@ class AppLocalizations {
         _isRu
             ? 'PackFoundry генерирует setup.iss из названия, версии, разработчика, сайта, лицензии и иконки, затем ISCC.exe собирает setup.exe и кладёт его в папку экспорта.'
             : 'PackFoundry generates setup.iss from the name, version, publisher, homepage, license and icon, then ISCC.exe compiles setup.exe into the export folder.',
+      'portable' =>
+        _isRu
+            ? 'PackFoundry генерирует portable.iss, и ISCC.exe упаковывает приложение в один exe. При запуске он распаковывает приложение во временную папку, запускает его и удаляет папку после закрытия. В систему ничего не устанавливается.'
+            : 'PackFoundry generates portable.iss and ISCC.exe packs the app into one exe. When started, it unpacks the app into a temporary folder, runs it and deletes the folder once the app closes. Nothing is installed.',
       'android-build' =>
         _isRu
             ? 'Во временной копии запускается flutter build apk --release через Gradle и Android SDK.'

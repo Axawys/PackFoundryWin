@@ -93,6 +93,57 @@ void main() {
     );
   });
 
+  test('generates a portable package that unpacks to a temp folder', () {
+    final metadata = WindowsInstallerMetadata.fromConfiguration(
+      configuration(),
+    );
+    final script = const WindowsInstallerFiles().portableScript(
+      metadata,
+      hasIcon: true,
+    );
+    final lines = script.split('\r\n');
+
+    expect(
+      metadata.portableFileName,
+      'Hash Checker_windows_2.1.1_x64_portable.exe',
+    );
+    expect(lines, contains('Uninstallable=no'));
+    expect(lines, contains('CreateAppDir=no'));
+    expect(lines, contains('PrivilegesRequired=lowest'));
+    expect(lines, contains('ShowLanguageDialog=no'));
+    expect(
+      lines,
+      contains('OutputBaseFilename=Hash Checker_windows_2.1.1_x64_portable'),
+    );
+    expect(lines, contains('SetupIconFile=setup.ico'));
+    expect(script, contains(r'DestDir: "{tmp}\app"'));
+    expect(script, contains('Flags: waituntilterminated'));
+    expect(script, contains('/VERYSILENT'));
+    expect(script, isNot(contains('[Icons]')));
+  });
+
+  test('builds the Windows runner once for setup.exe and portable', () {
+    final steps = BuildService().createRoadmapPlan([
+      for (final artifact in [BuildTarget.setupExe, BuildTarget.portable])
+        BuildTarget(
+          platform: 'Windows',
+          artifact: artifact,
+          status: TargetStatus.ready,
+          selected: true,
+        ),
+    ]);
+
+    expect(steps.map((step) => step.id), [
+      'project',
+      'workspace',
+      'windows-build',
+      'installer',
+      'portable',
+      'summary',
+      'cleanup',
+    ]);
+  });
+
   test('generates a double-clickable build script', () {
     final metadata = WindowsInstallerMetadata.fromConfiguration(
       configuration(),

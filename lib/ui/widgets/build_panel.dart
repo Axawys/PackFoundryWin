@@ -1176,6 +1176,14 @@ class _BuildCommandPlan {
             r'"%WORK_ROOT%\inno\setup.iss"',
         'dir "%EXPORT%\\${_cmdValue(metadata.setupFileName)}"',
       ],
+      'portable' => [
+        'set "ISCC=${_cmdValue(iscc)}"',
+        r'rem PackFoundry writes portable.iss to %WORK_ROOT%\inno',
+        '"%ISCC%" /Qp "/DSourceDir=%WORKSPACE%\\${WindowsInstallerFiles.releaseFolder}" '
+            '"/DMyAppExeName=${_cmdValue(metadata.exeName)}" "/O%EXPORT%" '
+            r'"%WORK_ROOT%\inno\portable.iss"',
+        'dir "%EXPORT%\\${_cmdValue(metadata.portableFileName)}"',
+      ],
       'android-build' => const [
         r'cd /d "%WORKSPACE%"',
         'call flutter build apk --release',

@@ -8,6 +8,7 @@ class BuildTarget {
 
   /// Artifact names of the targets PackFoundry builds.
   static const setupExe = 'Inno Setup exe';
+  static const portable = 'Portable';
   static const buildScript = 'Build script';
   static const apk = 'APK';
 
@@ -25,6 +26,7 @@ class BuildTarget {
   String get displayLabel {
     return switch (artifact) {
       setupExe => 'setup.exe',
+      portable => 'portable',
       buildScript => 'build_setup.cmd',
       apk => 'apk',
       _ => artifact,
