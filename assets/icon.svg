@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- PackFoundry icon, generated: 12-tooth gear (tip r=238, root r=204),
+       forge core r=150, hammer at 45 degrees. -->
+  <defs>
+    <linearGradient id="steelGear" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#7d838d"/>
+      <stop offset="0.45" stop-color="#474b53"/>
+      <stop offset="1" stop-color="#1e2024"/>
+    </linearGradient>
+    <linearGradient id="bevel" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.45"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="forge" cx="0.4" cy="0.62" r="0.62">
+      <stop offset="0" stop-color="#ffb04a"/>
+      <stop offset="0.28" stop-color="#e5600f"/>
+      <stop offset="0.62" stop-color="#6a2108"/>
+      <stop offset="1" stop-color="#1c0c06"/>
+    </radialGradient>
+    <radialGradient id="rim" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.86" stop-color="#ff8a1f" stop-opacity="0"/>
+      <stop offset="0.95" stop-color="#ffb347" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#ff6a00" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="faceShadow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.88" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0.55"/>
+    </radialGradient>
+    <linearGradient id="headTop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f4f6f9"/>
+      <stop offset="0.38" stop-color="#c3c8cf"/>
+      <stop offset="0.62" stop-color="#8c929b"/>
+      <stop offset="1" stop-color="#4c5058"/>
+    </linearGradient>
+    <linearGradient id="headSides" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#000" stop-opacity="0.35"/>
+      <stop offset="0.12" stop-color="#000" stop-opacity="0"/>
+      <stop offset="0.88" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0.35"/>
+    </linearGradient>
+    <linearGradient id="handle" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2a1a12"/>
+      <stop offset="0.4" stop-color="#7a4a2c"/>
+      <stop offset="0.6" stop-color="#5c3721"/>
+      <stop offset="1" stop-color="#1f130d"/>
+    </linearGradient>
+    <linearGradient id="neck" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3a3d44"/>
+      <stop offset="0.45" stop-color="#9aa0a8"/>
+      <stop offset="1" stop-color="#2e3136"/>
+    </linearGradient>
+    <linearGradient id="emberEdge" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#ff8a1f" stop-opacity="0.95"/>
+      <stop offset="0.5" stop-color="#ff8a1f" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="core"><circle cx="256" cy="256" r="150"/></clipPath>
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+    <filter id="sparkGlow" x="-200%" y="-200%" width="500%" height="500%">
+      <feGaussianBlur stdDeviation="1.4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="drop" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="9" flood-color="#000" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <!-- Gear -->
+  <path d="M220.58 55.1L229.06 19.53A238 238 0 0 1 282.94 19.53L291.42 55.1A204 204 0 0 1 325.77 64.3L350.9 37.74A238 238 0 0 1 397.57 64.68L387.13 99.73A204 204 0 0 1 412.27 124.87L447.32 114.43A238 238 0 0 1 474.26 161.1L447.7 186.23A204 204 0 0 1 456.9 220.58L492.47 229.06A238 238 0 0 1 492.47 282.94L456.9 291.42A204 204 0 0 1 447.7 325.77L474.26 350.9A238 238 0 0 1 447.32 397.57L412.27 387.13A204 204 0 0 1 387.13 412.27L397.57 447.32A238 238 0 0 1 350.9 474.26L325.77 447.7A204 204 0 0 1 291.42 456.9L282.94 492.47A238 238 0 0 1 229.06 492.47L220.58 456.9A204 204 0 0 1 186.23 447.7L161.1 474.26A238 238 0 0 1 114.43 447.32L124.87 412.27A204 204 0 0 1 99.73 387.13L64.68 397.57A238 238 0 0 1 37.74 350.9L64.3 325.77A204 204 0 0 1 55.1 291.42L19.53 282.94A238 238 0 0 1 19.53 229.06L55.1 220.58A204 204 0 0 1 64.3 186.23L37.74 161.1A238 238 0 0 1 64.68 114.43L99.73 124.87A204 204 0 0 1 124.87 99.73L114.43 64.68A238 238 0 0 1 161.1 37.74L186.23 64.3A204 204 0 0 1 220.58 55.1ZM256 88A168 168 0 1 0 256 424A168 168 0 1 0 256 88Z"
+        fill="url(#steelGear)" fill-rule="evenodd" stroke="#1d1f23" stroke-width="5"
+        stroke-linejoin="round"/>
+  <path d="M223.15 61.76L232.25 26.22A231 231 0 0 1 279.75 26.22L288.85 61.76A197 197 0 0 1 324.67 71.36L350.32 45.14A231 231 0 0 1 391.45 68.88L381.57 104.21A197 197 0 0 1 407.79 130.43L443.12 120.55A231 231 0 0 1 466.86 161.68L440.64 187.33A197 197 0 0 1 450.24 223.15L485.78 232.25A231 231 0 0 1 485.78 279.75L450.24 288.85A197 197 0 0 1 440.64 324.67L466.86 350.32A231 231 0 0 1 443.12 391.45L407.79 381.57A197 197 0 0 1 381.57 407.79L391.45 443.12A231 231 0 0 1 350.32 466.86L324.67 440.64A197 197 0 0 1 288.85 450.24L279.75 485.78A231 231 0 0 1 232.25 485.78L223.15 450.24A197 197 0 0 1 187.33 440.64L161.68 466.86A231 231 0 0 1 120.55 443.12L130.43 407.79A197 197 0 0 1 104.21 381.57L68.88 391.45A231 231 0 0 1 45.14 350.32L71.36 324.67A197 197 0 0 1 61.76 288.85L26.22 279.75A231 231 0 0 1 26.22 232.25L61.76 223.15A197 197 0 0 1 71.36 187.33L45.14 161.68A231 231 0 0 1 68.88 120.55L104.21 130.43A197 197 0 0 1 130.43 104.21L120.55 68.88A231 231 0 0 1 161.68 45.14L187.33 71.36A197 197 0 0 1 223.15 61.76ZM256 81A175 175 0 1 0 256 431A175 175 0 1 0 256 81Z"
+        fill="none" stroke="url(#bevel)" stroke-width="3" fill-rule="evenodd"
+        stroke-linejoin="round"/>
+
+  <!-- Forge -->
+  <circle cx="256" cy="256" r="168" fill="#120a06"/>
+  <circle cx="256" cy="256" r="150" fill="url(#forge)"/>
+  <circle cx="256" cy="256" r="150" fill="url(#faceShadow)"/>
+  <circle cx="256" cy="256" r="170" fill="url(#rim)" filter="url(#softGlow)"/>
+  <circle cx="256" cy="256" r="158" fill="none" stroke="#ffc266" stroke-width="3.5"/>
+
+  <!-- Hammer -->
+  <g transform="translate(256 256) rotate(45)" filter="url(#drop)">
+    <rect x="-21" y="-120" width="42" height="326"
+          rx="21" fill="url(#handle)" stroke="#120b07" stroke-width="4"/>
+    <rect x="-21" y="-120" width="42" height="326"
+          rx="21" fill="url(#emberEdge)" opacity="0.35"/>
+    <rect x="-32" y="-114" width="64" height="30"
+          rx="6" fill="url(#neck)" stroke="#16181b" stroke-width="4"/>
+    <polygon points="-100,-208 100,-208 118,-190 118,-126 100,-108 -100,-108 -118,-126 -118,-190" fill="url(#headTop)" stroke="#16181b"
+             stroke-width="5" stroke-linejoin="round"/>
+    <polygon points="-100,-208 100,-208 118,-190 118,-126 100,-108 -100,-108 -118,-126 -118,-190" fill="url(#headSides)"/>
+    <polygon points="-100,-208 100,-208 118,-190 118,-126 100,-108 -100,-108 -118,-126 -118,-190" fill="url(#emberEdge)" opacity="0.45"/>
+  </g>
+</svg>

@@ -187,6 +187,12 @@ flutter run -d windows
 flutter build windows --release
 ```
 
+Иконка построена по формулам: шестерня с 12 одинаковыми зубьями, концентрические окружности горна и молот под 45°. Параметры — в `tool/icon/make_icon.py`. Скрипт `tool/icon/build_icon.ps1` пересобирает из них `assets/icon.svg`, `assets/icon.png` (1024 px, прозрачный фон) и `windows/runner/resources/app_icon.ico` (16–256 px); для отрисовки SVG нужны Python и Microsoft Edge:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tool\icon\build_icon.ps1
+```
+
 ## Структура проекта
 
 ```text
