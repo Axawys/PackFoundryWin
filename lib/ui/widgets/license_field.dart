@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/licenses.dart';
 
-/// Picks one of the popular licenses; any other SPDX id can be typed in.
+/// Picks one of the popular licenses. The field cannot be typed into, so the
+/// installer always gets a known SPDX id.
 class LicenseField extends StatelessWidget {
   const LicenseField({
     required this.controller,
@@ -38,7 +39,10 @@ class LicenseField extends StatelessWidget {
         ),
       ),
       enabled: enabled,
-      requestFocusOnTap: true,
+      // A tap opens the list instead of focusing a text field to type in.
+      requestFocusOnTap: false,
+      enableFilter: false,
+      enableSearch: false,
       menuHeight: 360,
       label: Text(label),
       dropdownMenuEntries: [
