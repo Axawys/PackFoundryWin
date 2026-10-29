@@ -12,6 +12,7 @@ class ToolchainPanel extends StatelessWidget {
     required this.onInstallTools,
     required this.onRemoveTools,
     required this.onCancelInstall,
+    this.initiallyExpanded = false,
     super.key,
   });
 
@@ -20,10 +21,19 @@ class ToolchainPanel extends StatelessWidget {
   final ValueChanged<ToolchainInstallTarget> onInstallTools;
   final ValueChanged<ToolchainInstallTarget> onRemoveTools;
   final VoidCallback onCancelInstall;
+  final bool initiallyExpanded;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final missing = [
+      for (final group in groups)
+        for (final tool in group.tools)
+          if (tool.status != ToolAvailability.installed) tool,
+    ].length;
+    final summaryColor = missing == 0
+        ? context.status.success
+        : context.status.problem;
     final commonGroups = [
       for (final group in groups)
         if (group.category == ToolchainCategory.common) group,
@@ -33,9 +43,31 @@ class ToolchainPanel extends StatelessWidget {
         if (group.category == ToolchainCategory.platform) group,
     ];
 
-    return Section(
+    return CollapsibleSection(
       title: l10n.toolchain,
       icon: Icons.construction_outlined,
+      storageKey: 'toolchain',
+      initiallyExpanded: initiallyExpanded || installingTarget != null,
+      summary: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            missing == 0 ? Icons.check_circle_outline : Icons.error_outline,
+            size: 18,
+            color: summaryColor,
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              missing == 0
+                  ? l10n.toolchainAllSet
+                  : l10n.toolchainMissing(missing),
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: summaryColor),
+            ),
+          ),
+        ],
+      ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final columns = switch (constraints.maxWidth) {

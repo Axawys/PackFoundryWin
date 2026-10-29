@@ -28,6 +28,7 @@ void main() {
             onInstallTools: (_) {},
             onRemoveTools: (_) {},
             onCancelInstall: onCancel ?? () {},
+            initiallyExpanded: true,
           ),
         ),
       ),

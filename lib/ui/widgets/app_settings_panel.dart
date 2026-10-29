@@ -2,7 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../../core/models/developer_defaults.dart';
 import '../../l10n/app_localizations.dart';
+import 'license_field.dart';
 import 'section.dart';
 
 class AppSettingsPanel extends StatelessWidget {
@@ -15,6 +17,9 @@ class AppSettingsPanel extends StatelessWidget {
     required this.homepageUrlController,
     required this.licenseController,
     required this.descriptionController,
+    required this.defaultFields,
+    required this.defaults,
+    required this.onUseDefaultChanged,
     required this.iconPath,
     required this.onChooseIcon,
     super.key,
@@ -28,6 +33,12 @@ class AppSettingsPanel extends StatelessWidget {
   final TextEditingController homepageUrlController;
   final TextEditingController licenseController;
   final TextEditingController descriptionController;
+
+  /// Fields filled from [defaults] and locked for editing.
+  final Set<DeveloperField> defaultFields;
+  final DeveloperDefaults defaults;
+  final void Function(DeveloperField field, bool useDefault)
+  onUseDefaultChanged;
   final String? iconPath;
   final VoidCallback onChooseIcon;
 
@@ -87,35 +98,44 @@ class AppSettingsPanel extends StatelessWidget {
                   ),
                 ),
               ),
-              SizedBox(
-                width: 240,
-                child: TextField(
-                  controller: developerEmailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(labelText: l10n.developerEmail),
-                ),
-              ),
-              SizedBox(
+              _DefaultableField(
                 width: 220,
-                child: TextField(
-                  controller: publisherNameController,
-                  decoration: InputDecoration(labelText: l10n.publisherName),
-                ),
+                controller: publisherNameController,
+                label: l10n.publisherName,
+                useDefault: defaultFields.contains(DeveloperField.publisher),
+                hasDefault: defaults.publisherName.trim().isNotEmpty,
+                onUseDefaultChanged: (value) =>
+                    onUseDefaultChanged(DeveloperField.publisher, value),
               ),
-              SizedBox(
-                width: 260,
-                child: TextField(
-                  controller: homepageUrlController,
-                  keyboardType: TextInputType.url,
-                  decoration: InputDecoration(labelText: l10n.homepageUrl),
-                ),
+              _DefaultableField(
+                width: 240,
+                controller: developerEmailController,
+                label: l10n.developerEmail,
+                keyboardType: TextInputType.emailAddress,
+                useDefault: defaultFields.contains(DeveloperField.email),
+                hasDefault: defaults.developerEmail.trim().isNotEmpty,
+                onUseDefaultChanged: (value) =>
+                    onUseDefaultChanged(DeveloperField.email, value),
               ),
-              SizedBox(
-                width: 160,
-                child: TextField(
-                  controller: licenseController,
-                  decoration: InputDecoration(labelText: l10n.license),
-                ),
+              _DefaultableField(
+                width: 300,
+                controller: homepageUrlController,
+                label: l10n.homepageUrl,
+                keyboardType: TextInputType.url,
+                useDefault: defaultFields.contains(DeveloperField.homepage),
+                hasDefault: defaults.profileUrl != null,
+                onUseDefaultChanged: (value) =>
+                    onUseDefaultChanged(DeveloperField.homepage, value),
+              ),
+              _DefaultableField(
+                width: 220,
+                controller: licenseController,
+                label: l10n.license,
+                useDefault: defaultFields.contains(DeveloperField.license),
+                hasDefault: defaults.license.trim().isNotEmpty,
+                isLicense: true,
+                onUseDefaultChanged: (value) =>
+                    onUseDefaultChanged(DeveloperField.license, value),
               ),
             ],
           ),
@@ -137,6 +157,87 @@ class AppSettingsPanel extends StatelessWidget {
             buttonIcon: Icons.upload_file_outlined,
             buttonLabel: l10n.icon,
             onPressed: onChooseIcon,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A text field that either shows the default from the app settings or, once
+/// its checkbox is cleared, takes a value of its own.
+class _DefaultableField extends StatelessWidget {
+  const _DefaultableField({
+    required this.width,
+    required this.controller,
+    required this.label,
+    required this.useDefault,
+    required this.hasDefault,
+    required this.onUseDefaultChanged,
+    this.keyboardType,
+    this.isLicense = false,
+  });
+
+  final double width;
+  final TextEditingController controller;
+  final String label;
+  final bool useDefault;
+  final bool hasDefault;
+  final ValueChanged<bool> onUseDefaultChanged;
+  final TextInputType? keyboardType;
+
+  /// Shows the license picker instead of a plain text field.
+  final bool isLicense;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+
+    return SizedBox(
+      width: width,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (isLicense)
+            LicenseField(
+              controller: controller,
+              label: label,
+              width: width,
+              enabled: !useDefault,
+            )
+          else
+            TextField(
+              controller: controller,
+              readOnly: useDefault,
+              keyboardType: keyboardType,
+              style: useDefault
+                  ? TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    )
+                  : null,
+              decoration: InputDecoration(
+                labelText: label,
+                hintText: useDefault && !hasDefault ? l10n.defaultNotSet : null,
+                floatingLabelBehavior: useDefault && !hasDefault
+                    ? FloatingLabelBehavior.always
+                    : null,
+              ),
+            ),
+          InkWell(
+            borderRadius: BorderRadius.circular(4),
+            onTap: () => onUseDefaultChanged(!useDefault),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Checkbox(
+                  value: useDefault,
+                  visualDensity: VisualDensity.compact,
+                  onChanged: (value) => onUseDefaultChanged(value ?? false),
+                ),
+                Text(l10n.useDefault),
+                const SizedBox(width: 8),
+              ],
+            ),
           ),
         ],
       ),

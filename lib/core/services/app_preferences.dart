@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/developer_defaults.dart';
+import '../models/licenses.dart';
+
 class AppPreferences {
   static const _themeModeKey = 'themeMode';
   static const _localeModeKey = 'localeMode';
@@ -12,6 +15,11 @@ class AppPreferences {
   static const _projectDescriptionKey = 'projectDescription';
   static const _configPresetsKey = 'configPresets';
   static const _defaultOutputPathKey = 'defaultOutputPath';
+  static const _defaultPublisherNameKey = 'defaultPublisherName';
+  static const _defaultDeveloperEmailKey = 'defaultDeveloperEmail';
+  static const _githubProfileKey = 'githubProfile';
+  static const _defaultLicenseKey = 'defaultLicense';
+  static const _manualFieldsKey = 'manualFields';
 
   Future<AppSettings> load() async {
     final preferences = await SharedPreferences.getInstance();
@@ -56,6 +64,56 @@ class AppPreferences {
       preferences.setString(_publisherNameKey, metadata.publisherName),
       preferences.setString(_homepageUrlKey, metadata.homepageUrl),
       preferences.setString(_projectDescriptionKey, metadata.description),
+    ]);
+  }
+
+  /// Null until the defaults are saved for the first time.
+  Future<DeveloperDefaults?> loadDeveloperDefaults() async {
+    final preferences = await SharedPreferences.getInstance();
+    final publisherName = preferences.getString(_defaultPublisherNameKey);
+    final developerEmail = preferences.getString(_defaultDeveloperEmailKey);
+    final githubProfile = preferences.getString(_githubProfileKey);
+    final license = preferences.getString(_defaultLicenseKey);
+    if (publisherName == null &&
+        developerEmail == null &&
+        githubProfile == null &&
+        license == null) {
+      return null;
+    }
+    return DeveloperDefaults(
+      publisherName: publisherName ?? '',
+      developerEmail: developerEmail ?? '',
+      githubProfile: githubProfile ?? '',
+      license: license ?? LicenseOption.defaultId,
+    );
+  }
+
+  Future<void> saveDeveloperDefaults(DeveloperDefaults defaults) async {
+    final preferences = await SharedPreferences.getInstance();
+    await Future.wait([
+      preferences.setString(_defaultPublisherNameKey, defaults.publisherName),
+      preferences.setString(_defaultDeveloperEmailKey, defaults.developerEmail),
+      preferences.setString(_githubProfileKey, defaults.githubProfile),
+      preferences.setString(_defaultLicenseKey, defaults.license),
+    ]);
+  }
+
+  /// Fields of the Project workspace that follow the defaults. Only the
+  /// unticked ones are stored, so fields added later start ticked.
+  Future<Set<DeveloperField>> loadDefaultFields() async {
+    final preferences = await SharedPreferences.getInstance();
+    final manual = preferences.getStringList(_manualFieldsKey) ?? const [];
+    return {
+      for (final field in DeveloperField.values)
+        if (!manual.contains(field.name)) field,
+    };
+  }
+
+  Future<void> saveDefaultFields(Set<DeveloperField> fields) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setStringList(_manualFieldsKey, [
+      for (final field in DeveloperField.values)
+        if (!fields.contains(field)) field.name,
     ]);
   }
 

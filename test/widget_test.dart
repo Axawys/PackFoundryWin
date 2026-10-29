@@ -44,7 +44,8 @@ void main() {
 
     await tester.tap(find.text('Build'));
     await tester.pump();
-    expect(find.text('0 selected targets'), findsOneWidget);
+    // setup.exe is selected out of the box.
+    expect(find.text('1 selected target'), findsOneWidget);
     expect(find.bySubtype<FilledButton>(), findsOneWidget);
   });
 
@@ -271,10 +272,6 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    final setupTarget = find.text('setup.exe');
-    await tester.ensureVisible(setupTarget);
-    await tester.tap(setupTarget);
-    await tester.pump();
 
     await tester.tap(find.text('Build'));
     await tester.pump();
@@ -413,6 +410,18 @@ void main() {
     await tester.pump();
     await tester.pump();
 
+    // Developer fields follow the settings until their checkbox is cleared.
+    for (final label in ['Developer email', 'Developer / publisher']) {
+      expect(tester.widget<TextField>(field(label)).readOnly, isTrue);
+    }
+    final defaultBoxes = find.text('Default');
+    expect(defaultBoxes, findsNWidgets(4));
+    for (var index = 0; index < 4; index++) {
+      await tester.ensureVisible(defaultBoxes.at(index));
+      await tester.tap(defaultBoxes.at(index));
+      await tester.pump();
+    }
+
     await tester.enterText(field('Release tag'), 'v2.3.0');
     await tester.enterText(field('Developer email'), 'dev@example.com');
     await tester.enterText(field('Developer / publisher'), 'Example Studio');
@@ -453,6 +462,55 @@ void main() {
     expect(
       tester.widget<TextField>(field('Package description')).controller?.text,
       'Saved description',
+    );
+  });
+
+  testWidgets('fills developer fields from the settings defaults', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      'hideWelcome': true,
+      'defaultPublisherName': 'Axawys',
+      'defaultDeveloperEmail': 'axawys@example.com',
+      'githubProfile': 'Axawys',
+    });
+    Finder field(String label) {
+      return find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField && widget.decoration?.labelText == label,
+      );
+    }
+
+    await tester.pumpWidget(
+      const PackFoundryApp(enableToolchainDiagnostics: false),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<TextField>(field('Developer / publisher')).controller?.text,
+      'Axawys',
+    );
+    expect(
+      tester.widget<TextField>(field('Developer email')).controller?.text,
+      'axawys@example.com',
+    );
+
+    final emailDefault = find.text('Default').at(1);
+    await tester.ensureVisible(emailDefault);
+    await tester.tap(emailDefault);
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(field('Developer email')).readOnly,
+      isFalse,
+    );
+    await tester.enterText(field('Developer email'), 'other@example.com');
+    await tester.pump(const Duration(milliseconds: 450));
+
+    final preferences = await SharedPreferences.getInstance();
+    expect(preferences.getStringList('manualFields'), ['email']);
+    expect(
+      preferences.getString('defaultDeveloperEmail'),
+      'axawys@example.com',
     );
   });
 
@@ -848,10 +906,6 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    final setupTarget = find.text('setup.exe');
-    await tester.ensureVisible(setupTarget);
-    await tester.tap(setupTarget);
-    await tester.pump();
     await tester.tap(find.text('Build'));
     await tester.pump();
 

@@ -11,6 +11,8 @@ import '../../core/models/build_log_entry.dart';
 import '../../core/models/build_target.dart';
 import '../../core/models/chip_tone.dart';
 import '../../core/models/config_preset.dart';
+import '../../core/models/developer_defaults.dart';
+import '../../core/models/licenses.dart';
 import '../../core/models/project_config.dart';
 import '../../core/models/tool_status.dart';
 import '../../core/services/android_device_service.dart';
@@ -27,6 +29,7 @@ import '../../l10n/app_localizations.dart';
 import '../widgets/app_settings_panel.dart';
 import '../widgets/build_panel.dart';
 import '../widgets/config_presets_panel.dart';
+import '../widgets/developer_defaults_panel.dart';
 import '../widgets/preferences_panel.dart';
 import '../widgets/project_panel.dart';
 import '../widgets/installer_settings_panel.dart';
@@ -73,8 +76,16 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
   final _developerEmailController = TextEditingController();
   final _publisherNameController = TextEditingController();
   final _homepageUrlController = TextEditingController();
-  final _licenseController = TextEditingController(text: 'GPL-2.0-only');
+  final _licenseController = TextEditingController(
+    text: LicenseOption.defaultId,
+  );
   final _descriptionController = TextEditingController();
+  final _defaultPublisherController = TextEditingController();
+  final _defaultEmailController = TextEditingController();
+  final _githubProfileController = TextEditingController();
+  final _defaultLicenseController = TextEditingController(
+    text: LicenseOption.defaultId,
+  );
   final _widthController = TextEditingController(
     text: _WindowSize.packFoundryDefault.width.toString(),
   );
@@ -86,7 +97,16 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
   final _projectChecks = <ProjectCheck>[];
   final _configPresets = <ConfigPreset>[];
   Timer? _metadataSaveTimer;
+  Timer? _defaultsSaveTimer;
   bool _metadataListenersAttached = false;
+  bool _defaultsListenersAttached = false;
+
+  /// Release fields that show the developer defaults from the settings.
+  final Set<DeveloperField> _defaultFields = DeveloperField.values.toSet();
+
+  /// The homepage from the project's pubspec, used as the default homepage
+  /// while no GitHub profile is set.
+  String? _projectHomepage;
 
   String? _projectPath;
   String? _activeConfigPath;
@@ -135,6 +155,7 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       platform: 'Windows',
       artifact: BuildTarget.setupExe,
       status: TargetStatus.ready,
+      selected: true,
     ),
     BuildTarget(
       platform: 'Windows',
@@ -157,6 +178,8 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       vsync: this,
     );
     _workspaceTabController.addListener(_handleWorkspaceTabChanged);
+    // Targets selected out of the box show their plan right away.
+    _replaceRoadmapWithPreview();
     _loadReleaseMetadata();
     _loadDefaultOutputPath();
     _loadConfigPresets();
@@ -187,6 +210,106 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
     _restoreControllerText(_homepageUrlController, metadata.homepageUrl);
     _restoreControllerText(_descriptionController, metadata.description);
     _attachMetadataListeners();
+    await _loadDeveloperDefaults(metadata);
+  }
+
+  Future<void> _loadDeveloperDefaults(SavedReleaseMetadata metadata) async {
+    // The first run with defaults starts from the last typed values.
+    final defaults =
+        await _appPreferences.loadDeveloperDefaults() ??
+        DeveloperDefaults(
+          publisherName: metadata.publisherName,
+          developerEmail: metadata.developerEmail,
+        );
+    await _appPreferences.saveDeveloperDefaults(defaults);
+    final fields = await _appPreferences.loadDefaultFields();
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _defaultPublisherController.text = defaults.publisherName;
+      _defaultEmailController.text = defaults.developerEmail;
+      _githubProfileController.text = defaults.githubProfile;
+      _defaultLicenseController.text = defaults.license;
+      _defaultFields
+        ..clear()
+        ..addAll(fields);
+      _applyDeveloperDefaults();
+    });
+    if (!_defaultsListenersAttached) {
+      for (final controller in _defaultsControllers) {
+        controller.addListener(_handleDeveloperDefaultsChanged);
+      }
+      _defaultsListenersAttached = true;
+    }
+  }
+
+  List<TextEditingController> get _defaultsControllers => [
+    _defaultPublisherController,
+    _defaultEmailController,
+    _githubProfileController,
+    _defaultLicenseController,
+  ];
+
+  DeveloperDefaults get _developerDefaults => DeveloperDefaults(
+    publisherName: _defaultPublisherController.text,
+    developerEmail: _defaultEmailController.text,
+    githubProfile: _githubProfileController.text,
+    license: _defaultLicenseController.text,
+  );
+
+  void _handleDeveloperDefaultsChanged() {
+    setState(_applyDeveloperDefaults);
+    _defaultsSaveTimer?.cancel();
+    _defaultsSaveTimer = Timer(
+      const Duration(milliseconds: 400),
+      () => _appPreferences.saveDeveloperDefaults(_developerDefaults),
+    );
+  }
+
+  /// Copies the defaults into the release fields that follow them.
+  void _applyDeveloperDefaults() {
+    final defaults = _developerDefaults;
+    for (final field in _defaultFields) {
+      final controller = _controllerFor(field);
+      final value = _defaultValueFor(field, defaults);
+      if (controller.text != value) {
+        controller.text = value;
+      }
+    }
+  }
+
+  TextEditingController _controllerFor(DeveloperField field) {
+    return switch (field) {
+      DeveloperField.publisher => _publisherNameController,
+      DeveloperField.email => _developerEmailController,
+      DeveloperField.homepage => _homepageUrlController,
+      DeveloperField.license => _licenseController,
+    };
+  }
+
+  String _defaultValueFor(DeveloperField field, DeveloperDefaults defaults) {
+    return switch (field) {
+      DeveloperField.publisher => defaults.publisherName.trim(),
+      DeveloperField.email => defaults.developerEmail.trim(),
+      DeveloperField.homepage =>
+        defaults.homepageFor(_projectPath) ?? _projectHomepage ?? '',
+      DeveloperField.license => defaults.license.trim(),
+    };
+  }
+
+  /// Unticking keeps the default text as a starting point for editing.
+  void _setUseDefault(DeveloperField field, bool useDefault) {
+    setState(() {
+      if (useDefault) {
+        _defaultFields.add(field);
+        _applyDeveloperDefaults();
+      } else {
+        _defaultFields.remove(field);
+      }
+    });
+    unawaited(_appPreferences.saveDefaultFields(_defaultFields));
   }
 
   Future<void> _loadDefaultOutputPath() async {
@@ -716,6 +839,19 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       unawaited(_saveReleaseMetadata());
     }
     _metadataSaveTimer?.cancel();
+    if (_defaultsSaveTimer?.isActive ?? false) {
+      unawaited(_appPreferences.saveDeveloperDefaults(_developerDefaults));
+    }
+    _defaultsSaveTimer?.cancel();
+    if (_defaultsListenersAttached) {
+      for (final controller in _defaultsControllers) {
+        controller.removeListener(_handleDeveloperDefaultsChanged);
+      }
+    }
+    _defaultPublisherController.dispose();
+    _defaultEmailController.dispose();
+    _githubProfileController.dispose();
+    _defaultLicenseController.dispose();
     _appNameController.dispose();
     _projectPathController.dispose();
     _releaseTagController.dispose();
@@ -1524,6 +1660,7 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
         _iconAutoDetected = detectedIcon != null;
       }
       _projectPath = path;
+      _projectHomepage = projectMetadata.homepage;
       _updateTargetStatuses();
       if (!_isBuilding) {
         _replaceRoadmapWithPreview();
@@ -1554,6 +1691,7 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
           _homepageUrlController.text.trim().isEmpty) {
         _homepageUrlController.text = projectMetadata.homepage!;
       }
+      _applyDeveloperDefaults();
     });
   }
 
@@ -1746,10 +1884,10 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
     setState(() {
       _restoreConfigText(_appNameController, config.appName);
       _restoreConfigText(_releaseTagController, config.releaseTag);
-      _restoreConfigText(_developerEmailController, config.developerEmail);
-      _restoreConfigText(_publisherNameController, config.publisherName);
-      _restoreConfigText(_homepageUrlController, config.homepageUrl);
-      _restoreConfigText(_licenseController, config.license);
+      _restoreDefaultableText(DeveloperField.email, config.developerEmail);
+      _restoreDefaultableText(DeveloperField.publisher, config.publisherName);
+      _restoreDefaultableText(DeveloperField.homepage, config.homepageUrl);
+      _restoreDefaultableText(DeveloperField.license, config.license);
       _restoreConfigText(_descriptionController, config.description);
       if (config.windowWidth != null) {
         _widthController.text = config.windowWidth.toString();
@@ -1785,6 +1923,23 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
     if (value != null) {
       controller.text = value;
     }
+  }
+
+  /// A config value other than the default unticks the field's checkbox so
+  /// the value from the config is kept; an empty one leaves the default.
+  void _restoreDefaultableText(DeveloperField field, String? value) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) {
+      return;
+    }
+    if (_defaultFields.contains(field)) {
+      if (text == _defaultValueFor(field, _developerDefaults)) {
+        return;
+      }
+      _defaultFields.remove(field);
+      unawaited(_appPreferences.saveDefaultFields(_defaultFields));
+    }
+    _controllerFor(field).text = text;
   }
 
   void _showSnackBar(String message) {
@@ -2097,6 +2252,13 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       homepageUrlController: _homepageUrlController,
       licenseController: _licenseController,
       descriptionController: _descriptionController,
+      defaultPublisherController: _defaultPublisherController,
+      defaultEmailController: _defaultEmailController,
+      githubProfileController: _githubProfileController,
+      defaultLicenseController: _defaultLicenseController,
+      defaultFields: _defaultFields,
+      developerDefaults: _developerDefaults,
+      onUseDefaultChanged: _setUseDefault,
       widthController: _widthController,
       heightController: _heightController,
       targets: _targets,
@@ -2239,6 +2401,13 @@ class _WorkspaceContent extends StatelessWidget {
     required this.homepageUrlController,
     required this.licenseController,
     required this.descriptionController,
+    required this.defaultPublisherController,
+    required this.defaultEmailController,
+    required this.githubProfileController,
+    required this.defaultLicenseController,
+    required this.defaultFields,
+    required this.developerDefaults,
+    required this.onUseDefaultChanged,
     required this.widthController,
     required this.heightController,
     required this.targets,
@@ -2295,6 +2464,14 @@ class _WorkspaceContent extends StatelessWidget {
   final TextEditingController homepageUrlController;
   final TextEditingController licenseController;
   final TextEditingController descriptionController;
+  final TextEditingController defaultPublisherController;
+  final TextEditingController defaultEmailController;
+  final TextEditingController githubProfileController;
+  final TextEditingController defaultLicenseController;
+  final Set<DeveloperField> defaultFields;
+  final DeveloperDefaults developerDefaults;
+  final void Function(DeveloperField field, bool useDefault)
+  onUseDefaultChanged;
   final TextEditingController widthController;
   final TextEditingController heightController;
   final List<BuildTarget> targets;
@@ -2334,12 +2511,11 @@ class _WorkspaceContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final children = switch (index) {
       0 => [
-        ToolchainPanel(
-          groups: toolGroups,
-          installingTarget: installingToolTarget,
-          onInstallTools: onInstallTools,
-          onRemoveTools: onRemoveTools,
-          onCancelInstall: onCancelInstall,
+        DeveloperDefaultsPanel(
+          publisherNameController: defaultPublisherController,
+          developerEmailController: defaultEmailController,
+          githubProfileController: githubProfileController,
+          licenseController: defaultLicenseController,
         ),
         const SizedBox(height: 16),
         PreferencesPanel(
@@ -2350,6 +2526,14 @@ class _WorkspaceContent extends StatelessWidget {
           defaultOutputPath: defaultOutputPath,
           onChooseDefaultOutput: onChooseDefaultOutput,
           onResetDefaultOutput: onResetDefaultOutput,
+        ),
+        const SizedBox(height: 16),
+        ToolchainPanel(
+          groups: toolGroups,
+          installingTarget: installingToolTarget,
+          onInstallTools: onInstallTools,
+          onRemoveTools: onRemoveTools,
+          onCancelInstall: onCancelInstall,
         ),
       ],
       1 => [
@@ -2388,6 +2572,9 @@ class _WorkspaceContent extends StatelessWidget {
           homepageUrlController: homepageUrlController,
           licenseController: licenseController,
           descriptionController: descriptionController,
+          defaultFields: defaultFields,
+          defaults: developerDefaults,
+          onUseDefaultChanged: onUseDefaultChanged,
           iconPath: iconPath,
           onChooseIcon: onChooseIcon,
         ),

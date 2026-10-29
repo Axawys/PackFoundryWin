@@ -153,6 +153,17 @@ class AppLocalizations {
   String get defaultOutputFolder =>
       _isRu ? 'Папка экспорта по умолчанию' : 'Default output folder';
   String get resetToBuiltIn => _isRu ? 'Сбросить' : 'Reset';
+  String get developerDefaults =>
+      _isRu ? 'Разработчик по умолчанию' : 'Developer defaults';
+  String get developerDefaultsHint => _isRu
+      ? 'Подставляются в раздел «Проект», пока там отмечено «По умолчанию». '
+            'Сайт проекта = профиль GitHub + имя папки проекта.'
+      : 'Used in the Project workspace while "Default" is ticked there. '
+            'Project homepage = GitHub profile + project folder name.';
+  String get githubProfile => _isRu ? 'Профиль GitHub' : 'GitHub profile';
+  String get useDefault => _isRu ? 'По умолчанию' : 'Default';
+  String get defaultNotSet =>
+      _isRu ? 'Не задано в настройках' : 'Not set in settings';
   String get builtInOutputHint => _isRu
       ? 'build/pack_foundry в папке проекта'
       : 'build/pack_foundry inside the project';
@@ -268,6 +279,9 @@ class AppLocalizations {
 
   String get installers => _isRu ? 'Установщики' : 'Installers';
   String get toolchain => _isRu ? 'Инструменты' : 'Toolchain';
+  String get toolchainAllSet => _isRu ? 'Всё установлено' : 'All set';
+  String toolchainMissing(int count) =>
+      _isRu ? 'Не хватает: $count' : '$count not installed';
   String get build => _isRu ? 'Сборка' : 'Build';
   String selectedTargets(int count) {
     if (!_isRu) {
