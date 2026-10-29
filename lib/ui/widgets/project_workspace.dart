@@ -11,7 +11,6 @@ import '../../core/services/package_file_names.dart';
 import '../../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import 'license_field.dart';
-import 'status_chip.dart';
 import 'version_field.dart';
 import 'workspace_card.dart';
 
@@ -135,7 +134,7 @@ class ProjectWorkspace extends StatelessWidget {
       bottomBar: _BuildBar(workspace: this),
       children: [
         _AppCard(workspace: this),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         WorkspaceCardRow(
           cards: [
             WorkspaceCard(
@@ -171,7 +170,7 @@ class _AppCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final theme = Theme.of(context);
-    final muted = theme.textTheme.bodyMedium?.copyWith(
+    final muted = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
     );
     final w = workspace;
@@ -189,36 +188,49 @@ class _AppCard extends StatelessWidget {
         final name = w.appNameController.text.trim();
         final tag = w.releaseTagController.text.trim();
         final license = w.licenseController.text.trim();
-        final developer = [
+        final details = [
           w.publisherNameController.text.trim(),
           w.developerEmailController.text.trim(),
+          w.homepageUrlController.text.trim(),
         ].where((part) => part.isNotEmpty).join(' · ');
-        final homepage = w.homepageUrlController.text.trim();
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              crossAxisAlignment: WrapCrossAlignment.center,
+            Row(
               children: [
-                Padding(
-                  padding: const EdgeInsets.only(right: 4),
+                Flexible(
                   child: Text(
                     name.isEmpty ? l10n.applicationName : name,
-                    style: theme.textTheme.headlineSmall?.copyWith(
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
-                if (tag.isNotEmpty) SummaryChip(label: tag),
-                if (license.isNotEmpty) SummaryChip(label: license),
+                if (tag.isNotEmpty) ...[
+                  const SizedBox(width: 10),
+                  SummaryChip(label: tag),
+                ],
+                if (license.isNotEmpty) ...[
+                  const SizedBox(width: 6),
+                  SummaryChip(label: license),
+                ],
               ],
             ),
-            const SizedBox(height: 4),
-            if (developer.isNotEmpty) Text(developer, style: muted),
-            if (homepage.isNotEmpty)
-              Text(homepage, style: muted, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 2),
+            if (details.isNotEmpty)
+              Text(
+                details,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: muted,
+              ),
+            if (w.checks.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              _ChecksLine(checks: w.checks),
+            ],
           ],
         );
       },
@@ -253,71 +265,123 @@ class _AppCard extends StatelessWidget {
           icon: const Icon(Icons.folder_open_outlined),
           label: Text(l10n.chooseFolder),
         ),
+        const SizedBox(width: 10),
+        _ConfigMenu(workspace: w),
       ],
     );
 
-    final side = Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        _ConfigMenu(workspace: w),
-        if (w.checks.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Wrap(
-            alignment: WrapAlignment.end,
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final check in w.checks)
-                StatusChip(label: check.label, tone: check.tone),
-            ],
-          ),
-        ],
-      ],
+    final icon = Tooltip(
+      message: w.iconPath == null
+          ? l10n.changeIcon
+          : '${l10n.changeIcon}\n${w.iconPath}',
+      child: InkWell(
+        onTap: w.onChooseIcon,
+        borderRadius: BorderRadius.circular(14),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            AppIconPreview(path: w.iconPath, size: 72),
+            Positioned(
+              right: -4,
+              bottom: -4,
+              child: CircleAvatar(
+                radius: 11,
+                backgroundColor: theme.colorScheme.surfaceContainerHigh,
+                child: Icon(
+                  Icons.edit_outlined,
+                  size: 13,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
 
     return WorkspaceCard(
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final wide = constraints.maxWidth >= 980;
-          final main = Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          final head = Row(
             children: [
-              Tooltip(
-                message: l10n.changeIcon,
-                child: InkWell(
-                  onTap: w.onChooseIcon,
-                  borderRadius: BorderRadius.circular(20),
-                  child: AppIconPreview(path: w.iconPath, size: 96),
-                ),
-              ),
-              const SizedBox(width: 22),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [summary, const SizedBox(height: 14), projectRow],
-                ),
-              ),
+              icon,
+              const SizedBox(width: 16),
+              Expanded(child: summary),
             ],
           );
-          if (!wide) {
+          // Wide windows keep the whole card on one row, so the step cards
+          // below fit a Full HD screen at 150% scaling.
+          if (constraints.maxWidth < 1100) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [main, const SizedBox(height: 16), side],
+              children: [head, const SizedBox(height: 12), projectRow],
             );
           }
           return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: main),
-              const SizedBox(width: 28),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: side,
-              ),
+              Expanded(flex: 4, child: head),
+              const SizedBox(width: 20),
+              Expanded(flex: 5, child: projectRow),
             ],
           );
         },
       ),
+    );
+  }
+}
+
+/// The project checks in one line: what is missing is named, what passed is
+/// counted, with the full list in the tooltip.
+class _ChecksLine extends StatelessWidget {
+  const _ChecksLine({required this.checks});
+
+  final List<ProjectCheck> checks;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final theme = Theme.of(context);
+    final passed = [
+      for (final check in checks)
+        if (check.tone == ChipTone.good) check,
+    ];
+    final open = [
+      for (final check in checks)
+        if (check.tone != ChipTone.good) check,
+    ];
+    Widget item(IconData icon, Color color, String label) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 15, color: color),
+        const SizedBox(width: 4),
+        Text(label, style: theme.textTheme.bodySmall?.copyWith(color: color)),
+      ],
+    );
+
+    return Wrap(
+      spacing: 12,
+      runSpacing: 2,
+      children: [
+        if (passed.isNotEmpty)
+          Tooltip(
+            message: passed.map((check) => '✓ ${check.label}').join('\n'),
+            child: item(
+              Icons.check_circle_outline,
+              context.status.success,
+              l10n.projectChecksPassed(passed.length),
+            ),
+          ),
+        for (final check in open)
+          item(
+            check.tone == ChipTone.warning
+                ? Icons.error_outline
+                : Icons.radio_button_unchecked,
+            check.tone == ChipTone.warning
+                ? context.status.problem
+                : theme.colorScheme.onSurfaceVariant,
+            check.label,
+          ),
+      ],
     );
   }
 }
@@ -408,40 +472,31 @@ class _ConfigMenuState extends State<_ConfigMenu> {
         ),
       ],
       builder: (context, controller, _) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              l10n.configPresets,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 6),
-            OutlinedButton(
-              onPressed: () =>
-                  controller.isOpen ? controller.close() : controller.open(),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (active == null)
-                    const Icon(Icons.bookmarks_outlined, size: 18)
-                  else
-                    _ConfigPresetIcon(preset: active, isActive: true),
-                  const SizedBox(width: 8),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 220),
-                    child: Text(
-                      active?.name ?? l10n.noActiveConfig,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+        return Tooltip(
+          message: l10n.configPresets,
+          child: OutlinedButton(
+            onPressed: () =>
+                controller.isOpen ? controller.close() : controller.open(),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (active == null)
+                  const Icon(Icons.bookmarks_outlined, size: 18)
+                else
+                  _ConfigPresetIcon(preset: active, isActive: true),
+                const SizedBox(width: 8),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 220),
+                  child: Text(
+                    active?.name ?? l10n.noActiveConfig,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(width: 4),
-                  const Icon(Icons.arrow_drop_down),
-                ],
-              ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.arrow_drop_down),
+              ],
             ),
-          ],
+          ),
         );
       },
     );
@@ -515,40 +570,39 @@ class _AboutStep extends StatelessWidget {
           controller: w.appNameController,
           decoration: InputDecoration(labelText: l10n.applicationName),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
         VersionField(controller: w.releaseTagController),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
         TextField(
           controller: w.descriptionController,
-          minLines: 3,
-          maxLines: 3,
+          minLines: 2,
+          maxLines: 2,
           decoration: InputDecoration(
             labelText: l10n.packageDescription,
             alignLabelWithHint: true,
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
         Row(
           children: [
-            AppIconPreview(path: w.iconPath, size: 48),
-            const SizedBox(width: 12),
-            OutlinedButton.icon(
-              onPressed: w.onChooseIcon,
-              icon: const Icon(Icons.upload_file_outlined),
-              label: Text(l10n.changeIcon),
-            ),
-            const SizedBox(width: 12),
             Expanded(
-              child: Tooltip(
-                message: w.iconPath ?? '',
-                child: Text(
-                  w.iconPath == null
-                      ? l10n.noIconSelected
-                      : _fileName(w.iconPath!),
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+              child: TextField(
+                controller: w.widthController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: l10n.windowWidth,
+                  suffixText: 'px',
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextField(
+                controller: w.heightController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: l10n.windowHeight,
+                  suffixText: 'px',
                 ),
               ),
             ),
@@ -738,35 +792,9 @@ class _OutputStep extends StatelessWidget {
             target: target,
             onChanged: (selected) => w.onTargetChanged(target, selected),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
         ],
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: w.widthController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: l10n.windowWidth,
-                  suffixText: 'px',
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: TextField(
-                controller: w.heightController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: l10n.windowHeight,
-                  suffixText: 'px',
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 6),
         Row(
           children: [
             OutlinedButton.icon(
@@ -834,10 +862,10 @@ class _TargetTile extends StatelessWidget {
       child: InkWell(
         onTap: enabled ? () => onChanged(!target.selected) : null,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+          padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
           child: Row(
             children: [
-              Icon(_targetIcon(target), color: muted),
+              Icon(_targetIcon(target), color: muted, size: 22),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -849,7 +877,7 @@ class _TargetTile extends StatelessWidget {
                     ),
                     Text(
                       subtitle,
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(
                         context,
@@ -860,6 +888,7 @@ class _TargetTile extends StatelessWidget {
               ),
               Checkbox(
                 value: target.selected,
+                visualDensity: VisualDensity.compact,
                 onChanged: enabled
                     ? (value) => onChanged(value ?? false)
                     : null,
@@ -956,7 +985,7 @@ class _BuildBar extends StatelessWidget {
         border: Border(top: BorderSide(color: colors.outlineVariant)),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: workspaceMaxWidth),
@@ -1066,11 +1095,4 @@ class _BarStatus extends StatelessWidget {
       ],
     );
   }
-}
-
-// -------------------------------------------------------------------- shared
-
-String _fileName(String path) {
-  final separator = path.lastIndexOf(RegExp(r'[\\/]'));
-  return separator == -1 ? path : path.substring(separator + 1);
 }

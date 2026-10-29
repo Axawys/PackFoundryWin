@@ -561,6 +561,7 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       status: _commonToolsStatus,
       category: ToolchainCategory.common,
       installTarget: ToolchainInstallTarget.common,
+      unlocks: [l10n.allTargets],
       installProgress: _installProgressFor(ToolchainInstallTarget.common),
       tools: [
         ToolStatus(
@@ -596,6 +597,7 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       subtitle: l10n.windowsBuildGroupSubtitle,
       status: _windowsToolsStatus,
       installTarget: ToolchainInstallTarget.windows,
+      unlocks: const ['setup.exe', 'portable'],
       installProgress: _installProgressFor(ToolchainInstallTarget.windows),
       dependencyNote: _commonToolsDependencyNote(l10n),
       installSizeLabel: _visualStudioStatus == ToolAvailability.installed
@@ -636,6 +638,7 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       subtitle: l10n.androidBuildGroupSubtitle,
       status: _androidToolsStatus,
       installTarget: ToolchainInstallTarget.android,
+      unlocks: const ['apk'],
       installProgress: _installProgressFor(ToolchainInstallTarget.android),
       dependencyNote: _commonToolsDependencyNote(l10n),
       tools: [
@@ -2351,7 +2354,7 @@ class _PackFoundryHomePageState extends State<PackFoundryHomePage>
       onThemeModeChanged: widget.onThemeModeChanged,
       onLocaleModeChanged: widget.onLocaleModeChanged,
       onInstallTools: _installTools,
-      onRemoveTools: (_) {},
+      onRefreshTools: _refreshToolchainStatus,
       onCancelInstall: _cancelToolInstall,
       onChooseProject: _chooseProjectFolder,
       onProjectPathSubmitted: _applyTypedProjectPath,
@@ -2512,7 +2515,7 @@ class _WorkspaceContent extends StatelessWidget {
     required this.onThemeModeChanged,
     required this.onLocaleModeChanged,
     required this.onInstallTools,
-    required this.onRemoveTools,
+    required this.onRefreshTools,
     required this.onCancelInstall,
     required this.onChooseProject,
     required this.onProjectPathSubmitted,
@@ -2581,7 +2584,7 @@ class _WorkspaceContent extends StatelessWidget {
   final ValueChanged<ThemeMode> onThemeModeChanged;
   final ValueChanged<AppLocaleMode> onLocaleModeChanged;
   final ValueChanged<ToolchainInstallTarget> onInstallTools;
-  final ValueChanged<ToolchainInstallTarget> onRemoveTools;
+  final VoidCallback onRefreshTools;
   final VoidCallback onCancelInstall;
   final VoidCallback onChooseProject;
   final VoidCallback onProjectPathSubmitted;
@@ -2645,7 +2648,7 @@ class _WorkspaceContent extends StatelessWidget {
           toolGroups: toolGroups,
           installingToolTarget: installingToolTarget,
           onInstallTools: onInstallTools,
-          onRemoveTools: onRemoveTools,
+          onRefreshTools: onRefreshTools,
           onCancelInstall: onCancelInstall,
         ),
       ],
@@ -2723,9 +2726,10 @@ class _WorkspaceContent extends StatelessWidget {
     // visible together; it only scrolls when the window is very short.
     return LayoutBuilder(
       builder: (context, constraints) {
-        const minHeight = 640.0;
+        // Low enough for Full HD at 150% scaling (about 600 px of content).
+        const minHeight = 480.0;
         final panel = Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(16),
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: workspaceMaxWidth),

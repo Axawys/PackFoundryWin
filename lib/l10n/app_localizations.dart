@@ -135,7 +135,6 @@ class AppLocalizations {
       _isRu ? 'Описание пакета' : 'Package description';
   String get windowWidth => _isRu ? 'Ширина окна' : 'Window width';
   String get windowHeight => _isRu ? 'Высота окна' : 'Window height';
-  String get noIconSelected => _isRu ? 'Иконка не выбрана' : 'No icon selected';
   String get icon => _isRu ? 'Иконка' : 'Icon';
   String get defaultOutput => _isRu
       ? 'По умолчанию: build/pack_foundry'
@@ -170,25 +169,13 @@ class AppLocalizations {
       ? 'build/pack_foundry в папке проекта'
       : 'build/pack_foundry inside the project';
 
-  String get windowsBuildGroupTitle => 'EXE';
-  String get androidBuildGroupTitle => 'APK';
+  String get windowsBuildGroupTitle => 'Windows';
+  String get androidBuildGroupTitle => 'Android';
   String get installMissingTools =>
       _isRu ? 'Установить недостающие инструменты' : 'Install missing tools';
   String get installingTools => _isRu ? 'Установка...' : 'Installing...';
-  String get removeBuilder => _isRu ? 'Удалить builder' : 'Remove builder';
-  String builderInstallSize(String size) {
-    return _isRu ? 'Размер: $size' : 'Size: $size';
-  }
 
-  String get toolchainCommonSection => _isRu ? 'Общие' : 'Common';
-  String get toolchainCommonSectionHint => _isRu
-      ? 'Нужны для сборки под любую платформу.'
-      : 'Needed for every build target.';
-  String get toolchainPlatformsSection => _isRu ? 'Платформы' : 'Platforms';
-  String get toolchainPlatformsSectionHint => _isRu
-      ? 'Дополнительные инструменты для конкретных форматов.'
-      : 'Extra tools for specific package formats.';
-  String get commonToolsGroupTitle => 'FLUTTER';
+  String get commonToolsGroupTitle => 'Flutter';
   String get commonToolsGroupSubtitle => _isRu
       ? 'Flutter SDK и Git, без которых не соберётся ни одна цель.'
       : 'Flutter SDK and Git that every build target relies on.';
@@ -289,6 +276,8 @@ class AppLocalizations {
   String get githubProfileNotSet =>
       _isRu ? 'Профиль GitHub не задан' : 'No GitHub profile';
   String get aboutApp => _isRu ? 'О приложении' : 'About the app';
+  String projectChecksPassed(int count) =>
+      _isRu ? 'Проверок пройдено: $count' : '$count checks passed';
   String get developerStep => _isRu ? 'Разработчик' : 'Developer';
   String get outputStep => _isRu ? 'Результат' : 'Output';
   String get changeIcon => _isRu ? 'Сменить иконку' : 'Change icon';
@@ -313,6 +302,11 @@ class AppLocalizations {
       _isRu ? 'Идёт сборка… $percent%' : 'Building… $percent%';
   String get openBuild => _isRu ? 'Открыть сборку' : 'Open build';
   String get toolchain => _isRu ? 'Инструменты' : 'Toolchain';
+  String get checkToolsAgain => _isRu ? 'Проверить снова' : 'Check again';
+  String get toolsReady => _isRu ? 'Готово' : 'Ready';
+  String toolsMissingCount(int count) =>
+      _isRu ? 'Не хватает: $count' : '$count missing';
+  String get allTargets => _isRu ? 'все цели' : 'every target';
   String toolsNotInstalled(String names) =>
       _isRu ? 'Не установлено: $names' : 'Not installed: $names';
   String get build => _isRu ? 'Сборка' : 'Build';

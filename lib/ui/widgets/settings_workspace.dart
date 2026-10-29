@@ -32,7 +32,7 @@ class SettingsWorkspace extends StatelessWidget {
     required this.toolGroups,
     required this.installingToolTarget,
     required this.onInstallTools,
-    required this.onRemoveTools,
+    required this.onRefreshTools,
     required this.onCancelInstall,
     super.key,
   });
@@ -56,7 +56,7 @@ class SettingsWorkspace extends StatelessWidget {
   final List<ToolchainGroup> toolGroups;
   final ToolchainInstallTarget? installingToolTarget;
   final ValueChanged<ToolchainInstallTarget> onInstallTools;
-  final ValueChanged<ToolchainInstallTarget> onRemoveTools;
+  final VoidCallback onRefreshTools;
   final VoidCallback onCancelInstall;
 
   @override
@@ -91,7 +91,7 @@ class SettingsWorkspace extends StatelessWidget {
           groups: toolGroups,
           installingTarget: installingToolTarget,
           onInstallTools: onInstallTools,
-          onRemoveTools: onRemoveTools,
+          onRefresh: onRefreshTools,
           onCancelInstall: onCancelInstall,
         ),
       ],

@@ -42,7 +42,7 @@ class WorkspaceCard extends StatelessWidget {
         side: BorderSide(color: colors.outlineVariant),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
@@ -54,7 +54,7 @@ class WorkspaceCard extends StatelessWidget {
                 step: step,
                 trailing: trailing,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
             ],
             if (expand) Expanded(child: child) else child,
           ],
@@ -126,7 +126,7 @@ class WorkspacePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final page = SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(16),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: workspaceMaxWidth),
@@ -170,7 +170,7 @@ class WorkspaceCardRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               for (var index = 0; index < cards.length; index++) ...[
-                if (index > 0) const SizedBox(height: 16),
+                if (index > 0) const SizedBox(height: 12),
                 cards[index],
               ],
             ],
@@ -181,7 +181,7 @@ class WorkspaceCardRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               for (var index = 0; index < cards.length; index++) ...[
-                if (index > 0) const SizedBox(width: 16),
+                if (index > 0) const SizedBox(width: 12),
                 Expanded(child: cards[index]),
               ],
             ],

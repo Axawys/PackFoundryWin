@@ -8,7 +8,11 @@ import 'package:pack_foundry/ui/theme/app_theme.dart';
 import 'package:pack_foundry/ui/widgets/toolchain_panel.dart';
 
 void main() {
-  Widget buildPanel(List<ToolchainGroup> groups, {VoidCallback? onCancel}) {
+  Widget buildPanel(
+    List<ToolchainGroup> groups, {
+    VoidCallback? onCancel,
+    ValueChanged<ToolchainInstallTarget>? onInstall,
+  }) {
     return MaterialApp(
       theme: buildAppTheme(Brightness.light),
       localizationsDelegates: const [
@@ -25,8 +29,7 @@ void main() {
                 .where((group) => group.installProgress != null)
                 .map((group) => group.installTarget)
                 .firstOrNull,
-            onInstallTools: (_) {},
-            onRemoveTools: (_) {},
+            onInstallTools: onInstall ?? (_) {},
             onCancelInstall: onCancel ?? () {},
             initiallyExpanded: true,
           ),
@@ -42,37 +45,75 @@ void main() {
     note: '',
   );
 
-  testWidgets('shows common tools in their own section', (tester) async {
+  testWidgets('shows a card per platform with its state and targets', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    ToolchainInstallTarget? installed;
     await tester.pumpWidget(
       buildPanel(const [
         ToolchainGroup(
-          title: 'FLUTTER',
-          subtitle: 'Common',
+          title: 'Android',
+          subtitle: 'APK',
           status: ToolAvailability.available,
-          category: ToolchainCategory.common,
-          installTarget: ToolchainInstallTarget.common,
-          tools: [flutterTool],
-        ),
-        ToolchainGroup(
-          title: 'APK',
-          subtitle: 'Android',
-          status: ToolAvailability.installed,
           installTarget: ToolchainInstallTarget.android,
           dependencyNote: 'Needs common tools',
-          tools: [],
+          installSizeLabel: '3 GB',
+          unlocks: ['apk'],
+          tools: [
+            ToolStatus(
+              name: 'Android SDK',
+              command: 'adb',
+              status: ToolAvailability.missing,
+              note: 'Builds APK',
+            ),
+            ToolStatus(
+              name: 'Java',
+              command: 'java',
+              status: ToolAvailability.missing,
+              note: 'Runs Gradle',
+            ),
+          ],
         ),
-      ]),
+        ToolchainGroup(
+          title: 'Flutter',
+          subtitle: 'Common',
+          status: ToolAvailability.installed,
+          category: ToolchainCategory.common,
+          installTarget: ToolchainInstallTarget.common,
+          unlocks: ['every target'],
+          tools: [
+            ToolStatus(
+              name: 'Flutter SDK',
+              command: 'flutter',
+              status: ToolAvailability.installed,
+              note: 'Required for every build target',
+            ),
+          ],
+        ),
+      ], onInstall: (target) => installed = target),
     );
 
-    final common = tester.getTopLeft(find.text('COMMON'));
-    final platforms = tester.getTopLeft(find.text('PLATFORMS'));
-    expect(common.dy, lessThan(tester.getTopLeft(find.text('FLUTTER')).dy));
+    // The common card comes first even when listed later.
     expect(
-      platforms.dy,
-      greaterThan(tester.getTopLeft(find.text('FLUTTER')).dy),
+      tester.getTopLeft(find.text('Flutter')).dx,
+      lessThan(tester.getTopLeft(find.text('Android')).dx),
     );
-    expect(platforms.dy, lessThan(tester.getTopLeft(find.text('APK')).dy));
+    expect(find.text('Ready'), findsOneWidget);
+    expect(find.text('2 missing'), findsOneWidget);
+    expect(find.text('every target'), findsOneWidget);
+    expect(find.text('apk'), findsOneWidget);
     expect(find.text('Needs common tools'), findsOneWidget);
+    // Only the card with missing tools offers an install.
+    final install = find.widgetWithText(
+      FilledButton,
+      'Install missing tools · 3 GB',
+    );
+    expect(install, findsOneWidget);
+    await tester.tap(install);
+    expect(installed, ToolchainInstallTarget.android);
   });
 
   testWidgets('warns in the header only about missing common tools', (
@@ -130,7 +171,7 @@ void main() {
     await tester.pumpWidget(
       buildPanel(const [
         ToolchainGroup(
-          title: 'FLUTTER',
+          title: 'Flutter',
           subtitle: 'Common',
           status: ToolAvailability.available,
           category: ToolchainCategory.common,

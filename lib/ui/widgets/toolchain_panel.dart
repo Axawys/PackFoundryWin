@@ -5,13 +5,15 @@ import '../../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import 'section.dart';
 
+/// The toolchain as one card per platform: whether its targets can be built,
+/// which tools it needs, and one button that installs what is missing.
 class ToolchainPanel extends StatelessWidget {
   const ToolchainPanel({
     required this.groups,
     required this.installingTarget,
     required this.onInstallTools,
-    required this.onRemoveTools,
     required this.onCancelInstall,
+    this.onRefresh,
     this.initiallyExpanded = false,
     super.key,
   });
@@ -19,27 +21,29 @@ class ToolchainPanel extends StatelessWidget {
   final List<ToolchainGroup> groups;
   final ToolchainInstallTarget? installingTarget;
   final ValueChanged<ToolchainInstallTarget> onInstallTools;
-  final ValueChanged<ToolchainInstallTarget> onRemoveTools;
   final VoidCallback onCancelInstall;
+
+  /// Checks the tools again, e.g. after installing one by hand.
+  final VoidCallback? onRefresh;
   final bool initiallyExpanded;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final commonGroups = [
+    // Common tools first: every other card depends on them.
+    final ordered = [
       for (final group in groups)
         if (group.category == ToolchainCategory.common) group,
+      for (final group in groups)
+        if (group.category != ToolchainCategory.common) group,
     ];
     // Only the common tools are needed for every build, so only they warn
     // while the section is closed; platform tools show inside it.
     final missingCommon = [
-      for (final group in commonGroups)
-        for (final tool in group.tools)
-          if (tool.status != ToolAvailability.installed) tool.name,
-    ];
-    final platformGroups = [
-      for (final group in groups)
-        if (group.category == ToolchainCategory.platform) group,
+      for (final group in ordered)
+        if (group.category == ToolchainCategory.common)
+          for (final tool in group.tools)
+            if (tool.status != ToolAvailability.installed) tool.name,
     ];
 
     return CollapsibleSection(
@@ -67,130 +71,62 @@ class ToolchainPanel extends StatelessWidget {
                 ),
               ],
             ),
+      action: onRefresh == null
+          ? null
+          : OutlinedButton.icon(
+              onPressed: installingTarget == null ? onRefresh : null,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: Text(l10n.checkToolsAgain),
+            ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final columns = switch (constraints.maxWidth) {
-            >= 1180 => 3,
-            >= 720 => 2,
-            _ => 1,
-          };
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (commonGroups.isNotEmpty) ...[
-                _CategoryHeader(
-                  title: l10n.toolchainCommonSection,
-                  hint: l10n.toolchainCommonSectionHint,
-                ),
-                const SizedBox(height: 10),
-                for (final group in commonGroups) ...[
-                  _buildCard(group, toolColumns: columns),
-                  const SizedBox(height: 12),
+          final cards = [
+            for (final group in ordered)
+              _PlatformCard(
+                group: group,
+                installing: installingTarget == group.installTarget,
+                busy: installingTarget != null,
+                onInstallTools: onInstallTools,
+                onCancelInstall: onCancelInstall,
+                fillHeight: constraints.maxWidth >= 900,
+              ),
+          ];
+          if (constraints.maxWidth < 900) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var index = 0; index < cards.length; index++) ...[
+                  if (index > 0) const SizedBox(height: 12),
+                  cards[index],
                 ],
-                const SizedBox(height: 12),
               ],
-              if (platformGroups.isNotEmpty) ...[
-                _CategoryHeader(
-                  title: l10n.toolchainPlatformsSection,
-                  hint: l10n.toolchainPlatformsSectionHint,
-                ),
-                const SizedBox(height: 10),
-                _buildGrid(platformGroups, columns),
+            );
+          }
+          return IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var index = 0; index < cards.length; index++) ...[
+                  if (index > 0) const SizedBox(width: 12),
+                  Expanded(child: cards[index]),
+                ],
               ],
-            ],
+            ),
           );
         },
       ),
     );
   }
-
-  Widget _buildCard(ToolchainGroup group, {int toolColumns = 1}) {
-    return _ToolchainGroupCard(
-      group: group,
-      installing: installingTarget == group.installTarget,
-      busy: installingTarget != null,
-      toolColumns: toolColumns,
-      onInstallTools: onInstallTools,
-      onRemoveTools: onRemoveTools,
-      onCancelInstall: onCancelInstall,
-    );
-  }
-
-  Widget _buildGrid(List<ToolchainGroup> groups, int columns) {
-    const spacing = 12.0;
-    final columnGroups = [
-      for (var column = 0; column < columns; column++)
-        [
-          for (var index = column; index < groups.length; index += columns)
-            groups[index],
-        ],
-    ];
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (var column = 0; column < columnGroups.length; column++) ...[
-          Expanded(
-            child: Column(
-              children: [
-                for (final group in columnGroups[column]) ...[
-                  _buildCard(group),
-                  if (group != columnGroups[column].last)
-                    const SizedBox(height: spacing),
-                ],
-              ],
-            ),
-          ),
-          if (column != columnGroups.length - 1) const SizedBox(width: spacing),
-        ],
-      ],
-    );
-  }
 }
 
-class _CategoryHeader extends StatelessWidget {
-  const _CategoryHeader({required this.title, required this.hint});
-
-  final String title;
-  final String hint;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.end,
-      spacing: 10,
-      runSpacing: 2,
-      children: [
-        Text(
-          title.toUpperCase(),
-          style: textTheme.labelLarge?.copyWith(
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.8,
-          ),
-        ),
-        Text(
-          hint,
-          style: textTheme.bodySmall?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ToolchainGroupCard extends StatelessWidget {
-  const _ToolchainGroupCard({
+class _PlatformCard extends StatelessWidget {
+  const _PlatformCard({
     required this.group,
     required this.installing,
     required this.busy,
-    required this.toolColumns,
     required this.onInstallTools,
-    required this.onRemoveTools,
     required this.onCancelInstall,
+    required this.fillHeight,
   });
 
   final ToolchainGroup group;
@@ -198,182 +134,185 @@ class _ToolchainGroupCard extends StatelessWidget {
 
   /// True while any group is installing; only one installation runs at once.
   final bool busy;
-  final int toolColumns;
   final ValueChanged<ToolchainInstallTarget> onInstallTools;
-  final ValueChanged<ToolchainInstallTarget> onRemoveTools;
   final VoidCallback onCancelInstall;
+
+  /// Cards side by side share one height and keep their actions at the
+  /// bottom; stacked cards take only the height they need.
+  final bool fillHeight;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final missing = group.missingCount;
+    final ready = missing == 0;
+    final progress = group.installProgress;
+    final statusColor = ready ? context.status.success : context.status.problem;
 
-    return DecoratedBox(
+    return Container(
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        border: Border.all(color: colorScheme.outlineVariant, width: 1.5),
-        borderRadius: BorderRadius.circular(8),
+        color: colors.surfaceContainerLow,
+        border: Border.all(
+          color: ready || progress != null
+              ? colors.outlineVariant
+              : context.status.problem.withValues(alpha: 0.6),
+        ),
+        borderRadius: BorderRadius.circular(10),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(7),
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              ColoredBox(
-                color: _statusColor(context, group.status),
-                child: const SizedBox(width: 5),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            _groupIcon(group.status),
-                            color: _statusColor(context, group.status),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  group.title,
-                                  style: Theme.of(context).textTheme.titleLarge
-                                      ?.copyWith(fontWeight: FontWeight.w800),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(group.subtitle),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (group.dependencyNote != null) ...[
-                        const SizedBox(height: 10),
-                        _DependencyNote(text: group.dependencyNote!),
-                      ],
-                      if (group.installProgress != null) ...[
-                        const SizedBox(height: 12),
-                        _InstallProgress(
-                          progress: group.installProgress!,
-                          onCancel: onCancelInstall,
-                        ),
-                      ],
-                      if (group.status != ToolAvailability.installed ||
-                          group.canRemove) ...[
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 10,
-                          runSpacing: 8,
-                          children: [
-                            if (group.status != ToolAvailability.installed) ...[
-                              OutlinedButton.icon(
-                                onPressed: busy
-                                    ? null
-                                    : () => onInstallTools(group.installTarget),
-                                icon: Icon(
-                                  installing
-                                      ? Icons.hourglass_top_outlined
-                                      : Icons.download_outlined,
-                                ),
-                                label: Text(
-                                  installing
-                                      ? l10n.installingTools
-                                      : l10n.installMissingTools,
-                                ),
-                              ),
-                              if (group.installSizeLabel != null)
-                                _InstallSizeBadge(
-                                  label: l10n.builderInstallSize(
-                                    group.installSizeLabel!,
-                                  ),
-                                ),
-                            ],
-                            if (group.canRemove)
-                              OutlinedButton.icon(
-                                onPressed: busy
-                                    ? null
-                                    : () => onRemoveTools(group.installTarget),
-                                icon: const Icon(Icons.delete_outline),
-                                label: Text(l10n.removeBuilder),
-                              ),
-                          ],
-                        ),
-                      ],
-                      const SizedBox(height: 12),
-                      Divider(height: 1, color: colorScheme.outlineVariant),
-                      const SizedBox(height: 12),
-                      if (toolColumns > 1)
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            for (final tool in group.tools) ...[
-                              Expanded(child: _ToolRow(tool: tool)),
-                              if (tool != group.tools.last)
-                                const SizedBox(width: 16),
-                            ],
-                          ],
-                        )
-                      else
-                        for (final tool in group.tools) ...[
-                          _ToolRow(tool: tool),
-                          if (tool != group.tools.last)
-                            const Divider(height: 20),
-                        ],
-                    ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Tooltip(
+            message: group.subtitle,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    group.title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
+                ),
+                if (progress != null) ...[
+                  const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(l10n.installingTools, style: theme.textTheme.labelLarge),
+                ] else ...[
+                  Icon(
+                    ready ? Icons.check_circle : Icons.cancel_outlined,
+                    size: 20,
+                    color: statusColor,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    ready ? l10n.toolsReady : l10n.toolsMissingCount(missing),
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: statusColor,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (group.unlocks.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              children: [
+                for (final target in group.unlocks)
+                  _TargetLabel(label: target, ready: ready),
+              ],
+            ),
+          ],
+          const SizedBox(height: 12),
+          for (final tool in group.tools) ...[
+            _ToolLine(tool: tool),
+            const SizedBox(height: 8),
+          ],
+          if (group.dependencyNote != null) ...[
+            _DependencyNote(text: group.dependencyNote!),
+            const SizedBox(height: 8),
+          ],
+          if (fillHeight) const Spacer(),
+          if (progress != null)
+            _InstallProgress(progress: progress, onCancel: onCancelInstall)
+          else if (!ready)
+            FilledButton.icon(
+              onPressed: busy
+                  ? null
+                  : () => onInstallTools(group.installTarget),
+              icon: const Icon(Icons.download_outlined, size: 18),
+              label: Text(
+                group.installSizeLabel == null
+                    ? l10n.installMissingTools
+                    : '${l10n.installMissingTools} · ${group.installSizeLabel}',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A build target the card's tools make possible.
+class _TargetLabel extends StatelessWidget {
+  const _TargetLabel({required this.label, required this.ready});
+
+  final String label;
+  final bool ready;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            ready ? Icons.check_circle : Icons.cancel_outlined,
+            size: 14,
+            color: ready ? context.status.success : context.status.problem,
+          ),
+          const SizedBox(width: 4),
+          Text(label, style: theme.textTheme.labelMedium),
+        ],
+      ),
+    );
+  }
+}
+
+class _ToolLine extends StatelessWidget {
+  const _ToolLine({required this.tool});
+
+  final ToolStatus tool;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final installed = tool.status == ToolAvailability.installed;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(
+            installed ? Icons.check_circle : Icons.cancel_outlined,
+            size: 16,
+            color: installed ? context.status.success : context.status.problem,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(tool.name, style: theme.textTheme.bodyMedium),
+              Text(
+                tool.note,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  IconData _groupIcon(ToolAvailability status) {
-    return switch (status) {
-      ToolAvailability.installed => Icons.task_alt_outlined,
-      ToolAvailability.available => Icons.build_circle_outlined,
-      ToolAvailability.missing => Icons.report_problem_outlined,
-    };
-  }
-}
-
-class _InstallSizeBadge extends StatelessWidget {
-  const _InstallSizeBadge({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.sd_storage_outlined,
-              size: 16,
-              color: colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 6),
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
-          ],
-        ),
-      ),
+      ],
     );
   }
 }
@@ -424,7 +363,7 @@ class _InstallProgress extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -456,7 +395,7 @@ class _InstallProgress extends StatelessWidget {
               curve: Curves.easeOut,
               builder: (context, value, _) => LinearProgressIndicator(
                 value: value,
-                minHeight: 10,
+                minHeight: 6,
                 borderRadius: BorderRadius.circular(6),
               ),
             ),
@@ -590,54 +529,4 @@ class _InstallStepRow extends StatelessWidget {
       ),
     );
   }
-}
-
-class _ToolRow extends StatelessWidget {
-  const _ToolRow({required this.tool});
-
-  final ToolStatus tool;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(_toolIcon(tool.status), color: _statusColor(context, tool.status)),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(tool.name, style: Theme.of(context).textTheme.titleSmall),
-              if (tool.showCommand)
-                Text(
-                  tool.command,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              const SizedBox(height: 4),
-              Text(tool.note),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  IconData _toolIcon(ToolAvailability status) {
-    return switch (status) {
-      ToolAvailability.installed => Icons.check_circle_outline,
-      ToolAvailability.available => Icons.add_circle_outline,
-      ToolAvailability.missing => Icons.error_outline,
-    };
-  }
-}
-
-Color _statusColor(BuildContext context, ToolAvailability status) {
-  return switch (status) {
-    ToolAvailability.installed => context.status.success,
-    ToolAvailability.available => Theme.of(
-      context,
-    ).colorScheme.onSurfaceVariant,
-    ToolAvailability.missing => context.status.problem,
-  };
 }

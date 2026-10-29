@@ -12,6 +12,7 @@ class ToolchainGroup {
     this.installProgress,
     this.installSizeLabel,
     this.dependencyNote,
+    this.unlocks = const [],
   });
 
   final String title;
@@ -27,6 +28,12 @@ class ToolchainGroup {
   /// Shown when the group relies on tools from another group that are not
   /// ready yet, e.g. platform targets waiting for the common Flutter SDK.
   final String? dependencyNote;
+
+  /// Build targets these tools make possible, shown as labels.
+  final List<String> unlocks;
+
+  int get missingCount =>
+      tools.where((tool) => tool.status != ToolAvailability.installed).length;
 
   ChipTone get chipTone {
     return switch (status) {

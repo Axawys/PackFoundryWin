@@ -100,7 +100,7 @@ class _BuildPanelState extends State<BuildPanel> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildSummaryCard(context),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             if (bounded)
               Expanded(child: body)
             else
@@ -180,10 +180,10 @@ class _BuildPanelState extends State<BuildPanel> {
             children: [
               AppIconPreview(
                 path: configuration?.iconPath,
-                size: 72,
+                size: 56,
                 fallbackIcon: Icons.rocket_launch_outlined,
               ),
-              const SizedBox(width: 18),
+              const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -197,7 +197,7 @@ class _BuildPanelState extends State<BuildPanel> {
                           padding: const EdgeInsets.only(right: 4),
                           child: Text(
                             appName,
-                            style: theme.textTheme.headlineSmall?.copyWith(
+                            style: theme.textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.w600,
                               color: configuration == null
                                   ? colors.onSurfaceVariant
@@ -213,17 +213,17 @@ class _BuildPanelState extends State<BuildPanel> {
                           ),
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Text(
-                      l10n.selectedTargets(widget.selectedTargets),
+                      [
+                        l10n.selectedTargets(widget.selectedTargets),
+                        if (configuration != null && selected.isNotEmpty)
+                          packageFileNames(configuration, selected).join(', '),
+                      ].join('  ·  '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: muted,
                     ),
-                    if (configuration != null && selected.isNotEmpty)
-                      Text(
-                        packageFileNames(configuration, selected).join(', '),
-                        overflow: TextOverflow.ellipsis,
-                        style: muted,
-                      ),
                   ],
                 ),
               ),
@@ -232,7 +232,7 @@ class _BuildPanelState extends State<BuildPanel> {
             ],
           ),
           if (widget.isBuilding || widget.progress > 0) ...[
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
@@ -293,7 +293,7 @@ class _BuildPanelState extends State<BuildPanel> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(flex: 2, child: plan),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Expanded(flex: 3, child: console),
         ],
       );
@@ -387,9 +387,9 @@ class _PaneHeader extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
     return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 56),
+      constraints: const BoxConstraints(minHeight: 48),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 8, 8, 8),
+        padding: const EdgeInsets.fromLTRB(16, 4, 6, 4),
         child: Row(
           children: [
             Icon(icon, size: 22),

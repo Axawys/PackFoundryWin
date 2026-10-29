@@ -40,6 +40,7 @@ class CollapsibleSection extends StatefulWidget {
     required this.child,
     required this.storageKey,
     this.summary,
+    this.action,
     this.initiallyExpanded = false,
     super.key,
   });
@@ -51,6 +52,9 @@ class CollapsibleSection extends StatefulWidget {
 
   /// Shown next to the title, e.g. a status that stays visible when closed.
   final Widget? summary;
+
+  /// A button at the end of the header, e.g. to refresh the content.
+  final Widget? action;
   final bool initiallyExpanded;
 
   @override
@@ -113,6 +117,10 @@ class _CollapsibleSectionState extends State<CollapsibleSection> {
                       child: widget.summary,
                     ),
                   ),
+                  if (widget.action != null && _expanded) ...[
+                    widget.action!,
+                    const SizedBox(width: 8),
+                  ],
                   Icon(_expanded ? Icons.expand_less : Icons.expand_more),
                 ],
               ),
